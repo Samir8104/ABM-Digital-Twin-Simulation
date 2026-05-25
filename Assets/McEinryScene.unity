@@ -267697,7 +267697,7 @@ MonoBehaviour:
     m_ColorSpace: -1
     m_NumColorKeys: 2
     m_NumAlphaKeys: 2
-  numAgents: 200
+  numAgents: 300
   distToTargetThreshold: 2
   agentLm:
     serializedVersion: 2
