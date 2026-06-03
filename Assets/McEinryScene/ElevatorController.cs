@@ -51,6 +51,7 @@ public class ElevatorController : MonoBehaviour
     [Tooltip("Half-depth of the cage interior along the cage's LOCAL Z axis (front to back, away from doors).")]
     public float cageHalfDepth = 0.5f;
 
+    public int RiderCount => _riders.Count;
     // ── Private state ─────────────────────────────────────────────────────────
 
     private readonly List<NavigationAgent> _riders = new();
@@ -64,6 +65,8 @@ public class ElevatorController : MonoBehaviour
     private Vector3[] _leftClosedPos;
     private Vector3[] _rightClosedPos;
 
+   
+
     // ── Public API ────────────────────────────────────────────────────────────
 
     public bool IsFull => _riders.Count >= maxCapacity;
@@ -72,6 +75,8 @@ public class ElevatorController : MonoBehaviour
 
     public void RequestFloor(int targetFloor)
     {
+        Debug.Log($"[{gameObject.name}] RequestFloor({targetFloor}) | busy={_busy} | doorsOpen={_doorsOpen} | queue={_stopQueue.Count}");
+
         if (!_stopQueue.Contains(targetFloor))
             _stopQueue.Add(targetFloor);
 
@@ -243,4 +248,6 @@ public class ElevatorController : MonoBehaviour
             if (rider.TargetFloor == floor)
                 rider.ExitElevator(_currentFloor);
     }
+
+
 }

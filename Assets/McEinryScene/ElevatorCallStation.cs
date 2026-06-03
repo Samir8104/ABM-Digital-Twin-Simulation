@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
+
+
 /// <summary>
 /// Placed on the waiting-node in front of the elevator on each floor.
 /// Agents navigate here, register as waiting, and board when the elevator arrives.
@@ -17,7 +19,7 @@ public class ElevatorCallStation : MonoBehaviour
 
     [Tooltip("Maximum agents allowed to queue at this station. Agents beyond this take the stairs instead.")]
     public int maxWaitingAgents = 8;
-
+    public int WaitingCount => _waitingAgents.Count;
     // ── State ─────────────────────────────────────────────────────────────────
 
     // Agents currently waiting for the elevator on this floor

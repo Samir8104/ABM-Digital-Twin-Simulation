@@ -22,22 +22,14 @@ public class NavigationAgent : AbstractAgent
 
     // ── Elevator state ────────────────────────────────────────────────────────
 
-    // The floor this agent needs to reach when riding the elevator
     public int TargetFloor { get; private set; } = 0;
 
-    // True while this agent is inside the cage
     private bool _isRiding = false;
-
-    // Active elevator reference while riding
     private ElevatorController _elevator = null;
-
-    // The call station the agent is currently walking toward (cleared on arrival)
     private ElevatorCallStation _pendingCallStation = null;
-
-    // The final destination floor stored so we can pass it to the station on arrival
     private int _pendingDestFloor = 0;
 
-    // All call stations cached once at Init
+    // All call stations cached once at Init — includes every elevator in the scene
     private ElevatorCallStation[] _callStations;
 
     // ── Init ──────────────────────────────────────────────────────────────────
@@ -83,14 +75,9 @@ public class NavigationAgent : AbstractAgent
                 int destFloor = _pendingDestFloor;
                 _pendingCallStation = null;
 
-                // TryRegister is the second gate: queue may have filled during the walk
                 bool accepted = station.TryRegisterWaitingAgent(this, destFloor);
                 if (!accepted)
-                {
-                    // Queue filled by the time we arrived — take stairs to the stored room
                     TakeStairs(targetRoom);
-                }
-                // If accepted, agent stands idle here waiting for BoardElevator() callback
                 return;
             }
 
@@ -104,7 +91,6 @@ public class NavigationAgent : AbstractAgent
 
     void Move()
     {
-        // Elevator moves the agent via TeleportWithElevator while riding
         if (_isRiding) return;
 
         nmAgent.velocity = Vector3.zero;
@@ -152,16 +138,14 @@ public class NavigationAgent : AbstractAgent
         int newFloor = GetFloorOfRoom(newRoom);
         int thisFloor = GetFloorOfRoom(targetRoom);
 
-        // Same floor — walk directly, no elevator needed
         if (newFloor == thisFloor || newFloor < 0 || thisFloor < 0)
         {
             SetTarget(newRoom);
             return;
         }
 
-        // Different floor — first gate: check before even starting the walk
-        ElevatorCallStation station = GetCallStationForFloor(thisFloor);
-        if (station != null && station.IsElevatorViable())
+        ElevatorCallStation station = GetBestStationForFloor(thisFloor);
+        if (station != null)
             StartElevatorJourney(newRoom, newFloor, station);
         else
             TakeStairs(newRoom);
@@ -169,14 +153,10 @@ public class NavigationAgent : AbstractAgent
 
     // ── Elevator journey ──────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Walks the agent to the call station. CheckDistToTarget will attempt
-    /// registration on arrival via the second gate.
-    /// </summary>
     private void StartElevatorJourney(GameObject destinationRoom, int destFloor,
                                        ElevatorCallStation station)
     {
-        targetRoom = destinationRoom; // remember final destination
+        targetRoom = destinationRoom;
         TargetFloor = destFloor;
         _pendingCallStation = station;
         _pendingDestFloor = destFloor;
@@ -188,16 +168,10 @@ public class NavigationAgent : AbstractAgent
         CreateStepper(Move, 1, 105);
     }
 
-    /// <summary>
-    /// Navigates directly via stairs/ramp NavMesh links.
-    /// </summary>
     private void TakeStairs(GameObject room) => SetTarget(room);
 
     // ── Called by ElevatorCallStation / ElevatorController ───────────────────
 
-    /// <summary>
-    /// Called when the elevator arrives and this agent may enter the cage.
-    /// </summary>
     public void BoardElevator(ElevatorController elevator)
     {
         _elevator = elevator;
@@ -206,27 +180,18 @@ public class NavigationAgent : AbstractAgent
         elevator.BoardAgent(this);
     }
 
-    /// <summary>
-    /// Called by ElevatorController when the cage reaches TargetFloor.
-    /// Agent exits and navigates to the final room.
-    /// </summary>
     public void ExitElevator(int floorIndex)
     {
         _elevator.ExitAgent(this);
         _elevator = null;
         _isRiding = false;
 
-        // Warp so NavMesh pathfinding resumes from the correct position
         nmAgent.Warp(transform.position);
         nmAgent.isStopped = false;
 
         SetTarget(targetRoom);
     }
 
-    /// <summary>
-    /// Called by ElevatorController every frame while the cage is moving,
-    /// and once on board to place the agent at their assigned grid slot.
-    /// </summary>
     public void TeleportWithElevator(Vector3 slotPosition)
     {
         transform.position = slotPosition;
@@ -242,9 +207,6 @@ public class NavigationAgent : AbstractAgent
         nmAgent.acceleration = 0f;
     }
 
-    /// <summary>
-    /// Returns the floor index of a room by proximity to the nearest call station.
-    /// </summary>
     private int GetFloorOfRoom(GameObject room)
     {
         if (room == null) return -1;
@@ -259,14 +221,22 @@ public class NavigationAgent : AbstractAgent
         }
         return best;
     }
-
-    /// <summary>
-    /// Finds the ElevatorCallStation assigned to a specific floor index.
-    /// </summary>
-    private ElevatorCallStation GetCallStationForFloor(int floor)
+    private ElevatorCallStation GetBestStationForFloor(int floor)
     {
+        ElevatorCallStation best = null;
+        int bestLoad = int.MaxValue;
+
         foreach (var s in _callStations)
-            if (s.floorIndex == floor) return s;
-        return null;
+        {
+            Debug.Log($"Station: {s.gameObject.name} | floor={s.floorIndex} | viable={s.IsElevatorViable()} | elevator={s.elevatorController.gameObject.name}");
+
+            if (s.floorIndex != floor) continue;
+            if (!s.IsElevatorViable()) continue;
+
+            int load = s.WaitingCount + s.elevatorController.RiderCount;
+            if (load < bestLoad) { bestLoad = load; best = s; }
+        }
+
+        return best;
     }
 }
