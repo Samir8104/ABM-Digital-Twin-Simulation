@@ -51,7 +51,6 @@ public class ElevatorController : MonoBehaviour
     [Tooltip("Half-depth of the cage interior along the cage's LOCAL Z axis (front to back, away from doors).")]
     public float cageHalfDepth = 0.5f;
 
-    public int RiderCount => _riders.Count;
     // ── Private state ─────────────────────────────────────────────────────────
 
     private readonly List<NavigationAgent> _riders = new();
@@ -62,21 +61,33 @@ public class ElevatorController : MonoBehaviour
     private bool _busy = false;
     private bool _doorsOpen = false;
 
+    // Tracks which floors have already been serviced this run so we never
+    // open the doors twice for the same stop
+    private readonly HashSet<int> _servicedThisStop = new();
+
     private Vector3[] _leftClosedPos;
     private Vector3[] _rightClosedPos;
-
-   
 
     // ── Public API ────────────────────────────────────────────────────────────
 
     public bool IsFull => _riders.Count >= maxCapacity;
     public bool IsBusy => _busy;
     public int CurrentFloor => _currentFloor;
+    public int RiderCount => _riders.Count;
+
+    /// <summary>
+    /// Returns the world-space position of this elevator's call station on
+    /// the given floor — used by agents to warp to a safe exit point.
+    /// </summary>
+    public Vector3 GetCallStationPosition(int floor)
+    {
+        if (floor < callStations.Length && callStations[floor] != null)
+            return callStations[floor].transform.position;
+        return transform.position;
+    }
 
     public void RequestFloor(int targetFloor)
     {
-        Debug.Log($"[{gameObject.name}] RequestFloor({targetFloor}) | busy={_busy} | doorsOpen={_doorsOpen} | queue={_stopQueue.Count}");
-
         if (!_stopQueue.Contains(targetFloor))
             _stopQueue.Add(targetFloor);
 
@@ -84,11 +95,9 @@ public class ElevatorController : MonoBehaviour
             StartCoroutine(RunElevator());
     }
 
-    /// <summary>Registers a boarding agent and immediately places them at their slot.</summary>
     public void BoardAgent(NavigationAgent agent)
     {
         _riders.Add(agent);
-        // Place the agent at their assigned slot straight away
         agent.TeleportWithElevator(GetRiderSlot(_riders.Count - 1));
     }
 
@@ -125,14 +134,18 @@ public class ElevatorController : MonoBehaviour
             _currentFloor = nextFloor;
             _direction = 0;
 
+            // Open doors once and board/unload — never repeat for the same stop
             _doorsOpen = true;
             yield return StartCoroutine(AnimateDoors(nextFloor, open: true));
 
+            // Let waiting agents board (respects IsFull internally)
             if (nextFloor < callStations.Length && callStations[nextFloor] != null)
                 callStations[nextFloor].OnElevatorArrived();
 
+            // Let riders who need this floor exit
             NotifyRidersAtFloor(nextFloor);
 
+            // Hold doors open for the dwell period — no boarding/unloading happens again after this
             yield return new WaitForSeconds(doorDwellTime);
 
             yield return StartCoroutine(AnimateDoors(nextFloor, open: false));
@@ -180,7 +193,6 @@ public class ElevatorController : MonoBehaviour
             t += Time.deltaTime * travelSpeed / Mathf.Max(dist, 0.01f);
             transform.position = Vector3.Lerp(start, end, Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t)));
 
-            // Keep each rider at their own spread slot as the cage moves
             for (int i = 0; i < _riders.Count; i++)
                 _riders[i].TeleportWithElevator(GetRiderSlot(i));
 
@@ -199,12 +211,17 @@ public class ElevatorController : MonoBehaviour
         Transform ld = leftDoors[floor];
         Transform rd = rightDoors[floor];
 
+        // Always lerp from the current actual position so a mid-animation
+        // interrupt (which shouldn't happen now) never causes a jump
         Vector3 lStart = ld.localPosition;
         Vector3 rStart = rd.localPosition;
 
-        // Axis might change — Z used here; swap to X if your doors slide side-to-side
         Vector3 lEnd = open ? _leftClosedPos[floor] + Vector3.forward * doorOpenOffset : _leftClosedPos[floor];
         Vector3 rEnd = open ? _rightClosedPos[floor] + Vector3.back * doorOpenOffset : _rightClosedPos[floor];
+
+        // If already at the target position, skip the animation entirely
+        if (Vector3.Distance(lStart, lEnd) < 0.001f && Vector3.Distance(rStart, rEnd) < 0.001f)
+            yield break;
 
         float t = 0f;
         while (t < 1f)
@@ -222,10 +239,6 @@ public class ElevatorController : MonoBehaviour
 
     // ── Rider slot layout ─────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Returns a world-space position for the given rider slot, spread in a grid
-    /// and shifted by the flat <see cref="riderOffset"/>.
-    /// </summary>
     private Vector3 GetRiderSlot(int slot)
     {
         int cols = Mathf.Max(1, Mathf.CeilToInt(Mathf.Sqrt(maxCapacity)));
@@ -236,7 +249,6 @@ public class ElevatorController : MonoBehaviour
         float localX = cols > 1 ? Mathf.Lerp(-cageHalfWidth, cageHalfWidth, (float)col / (cols - 1)) : 0f;
         float localZ = totalRows > 1 ? Mathf.Lerp(-cageHalfDepth, cageHalfDepth, (float)row / (totalRows - 1)) : 0f;
 
-        // Spread across the grid then apply the flat offset to push agents into the elevator
         return transform.position + transform.right * localX + transform.forward * localZ + riderOffset;
     }
 
@@ -248,6 +260,4 @@ public class ElevatorController : MonoBehaviour
             if (rider.TargetFloor == floor)
                 rider.ExitElevator(_currentFloor);
     }
-
-
 }

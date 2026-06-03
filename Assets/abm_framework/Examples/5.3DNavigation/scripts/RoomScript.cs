@@ -8,6 +8,7 @@ public class RoomScript : MonoBehaviour
 {
     NavigationController nCont;
     int numAgents = 0;
+    public int roomNumber;
     Renderer floorRenderer;
     Bounds bounds;
 

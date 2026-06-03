@@ -182,11 +182,17 @@ public class NavigationAgent : AbstractAgent
 
     public void ExitElevator(int floorIndex)
     {
+        // Get the call station position on this floor before releasing the elevator ref
+        Vector3 exitPosition = _elevator.GetCallStationPosition(floorIndex);
+
         _elevator.ExitAgent(this);
         _elevator = null;
         _isRiding = false;
 
-        nmAgent.Warp(transform.position);
+        // Warp to the call station so the agent is guaranteed on the NavMesh,
+        // in open space, not behind the elevator cage
+        transform.position = exitPosition;
+        nmAgent.Warp(exitPosition);
         nmAgent.isStopped = false;
 
         SetTarget(targetRoom);
@@ -221,6 +227,11 @@ public class NavigationAgent : AbstractAgent
         }
         return best;
     }
+
+    /// <summary>
+    /// Loops all stations on this floor (one per elevator) and returns the
+    /// viable one with the fewest riders + waiters. Returns null if none are viable.
+    /// </summary>
     private ElevatorCallStation GetBestStationForFloor(int floor)
     {
         ElevatorCallStation best = null;
@@ -228,8 +239,6 @@ public class NavigationAgent : AbstractAgent
 
         foreach (var s in _callStations)
         {
-            Debug.Log($"Station: {s.gameObject.name} | floor={s.floorIndex} | viable={s.IsElevatorViable()} | elevator={s.elevatorController.gameObject.name}");
-
             if (s.floorIndex != floor) continue;
             if (!s.IsElevatorViable()) continue;
 
