@@ -3,16 +3,31 @@ using ABMU.Core;
 using UnityEngine.AI;
 
 /// <summary>
-/// Handles agent navigation, room selection, and elevator/stair decision-making.
-/// Core movement logic (Move, CheckDistToTarget, Stay) is unchanged.
+/// Handles agent navigation, room selection, and schedule-driven behaviour.
+///
+/// Changes from the original:
+///   • Accepts an <see cref="AgentSchedule"/> injected by <see cref="ScheduleManager"/>.
+///   • Every tick the schedule is consulted; when it issues a command the agent
+///     transitions to the appropriate room or behaviour.
+///   • Bathroom → node named "Bathroom" (or "officeHours" for the original naming).
+///   • Office hours → node tagged/named "OfficeHours".
+///   • Chatting / Wandering → random room on the same floor.
+///   • Core movement helpers (Move, CheckDistToTarget) are unchanged.
 /// </summary>
 public class NavigationAgent : AbstractAgent
 {
+    // ── Scene references ──────────────────────────────────────────────────────
+
     NavigationController nCont;
     NavMeshAgent nmAgent;
+    TimeManager _time;
+
+    // ── Navigation state ──────────────────────────────────────────────────────
+
     Vector3 target;
     public GameObject targetRoom;
     public bool isNearTarget = false;
+
     int timeSpentSitting = 0;
     int stationaryDuration = -1;
 
@@ -28,39 +43,139 @@ public class NavigationAgent : AbstractAgent
     private ElevatorController _elevator = null;
     private ElevatorCallStation _pendingCallStation = null;
     private int _pendingDestFloor = 0;
-
-    // All call stations cached once at Init — includes every elevator in the scene
     private ElevatorCallStation[] _callStations;
 
+    // ── Schedule ──────────────────────────────────────────────────────────────
+
+    private AgentSchedule _schedule;
+
+    /// <summary>
+    /// How often (in ABMU steps) to poll the schedule. At 1 step/frame this is
+    /// roughly once per second at 60 fps. Increase for cheaper polling.
+    /// </summary>
+    private const int SchedulePollInterval = 60;
+
+    // Node-name constants — change here if your scene uses different names.
+    private const string BathroomNodeName = "Bathroom";      // or "officeHours"
+    private const string OfficeHoursNodeName = "OfficeHours";
+
     // ── Init ──────────────────────────────────────────────────────────────────
+
+    /// <summary>Called by ScheduleManager before Init() to inject the schedule.</summary>
+    public void SetSchedule(AgentSchedule schedule) => _schedule = schedule;
 
     public void Init(GameObject _targetRoom)
     {
         base.Init();
-        nCont = GameObject.FindObjectOfType<NavigationController>();
+        nCont = FindObjectOfType<NavigationController>();
         nmAgent = GetComponent<NavMeshAgent>();
-        _callStations = GameObject.FindObjectsOfType<ElevatorCallStation>();
+        _time = FindObjectOfType<TimeManager>();
+        _callStations = FindObjectsOfType<ElevatorCallStation>();
+
         SetNMAgentProperties();
-        SetupStationary();
+
+        // Start idle — the schedule stepper will issue the first move command.
+        targetRoom = _targetRoom;
+        CreateStepper(TickSchedule, SchedulePollInterval, 1);   // low priority, infrequent
+    }
+
+    // ── Schedule stepper ──────────────────────────────────────────────────────
+
+    /// <summary>Polls the schedule and reacts to any issued command.</summary>
+    void TickSchedule()
+    {
+        if (_schedule == null || _time == null) return;
+
+        ScheduleCommand cmd = _schedule.Tick(_time);
+        if (cmd.Changed)
+            ApplyCommand(cmd);
+    }
+
+    /// <summary>Applies a ScheduleCommand: start moving, stay, or leave.</summary>
+    private void ApplyCommand(ScheduleCommand cmd)
+    {
+        if (cmd.ActivityHint == AgentActivity.Done)
+        {
+            // Agent is done for the day — stop all activity and disable.
+            StopMoving();
+            DestroyStepper("TickSchedule");
+            gameObject.SetActive(false);
+            return;
+        }
+
+        if (cmd.Target != null)
+        {
+            // A specific destination was given (e.g. classroom).
+            NavigateTo(cmd.Target);
+            return;
+        }
+
+        // No explicit target: resolve based on activity hint.
+        switch (cmd.ActivityHint)
+        {
+            case AgentActivity.GoingToBathroom:
+                NavigateToNamedNode(BathroomNodeName);
+                break;
+
+            case AgentActivity.GoingToOfficeHours:
+                NavigateToNamedNode(OfficeHoursNodeName);
+                break;
+
+            case AgentActivity.Chatting:
+            case AgentActivity.Wandering:
+                // Pick a random room on the same floor and wander there.
+                NavigateTo(nCont.GetRandomRoom());
+                break;
+
+            case AgentActivity.InClass:
+            case AgentActivity.InBathroom:
+            case AgentActivity.InOfficeHours:
+                // Arrived/in-place: the schedule drives the stay timer via NotifyActivityTimer.
+                SetupStationary();
+                break;
+        }
+    }
+
+    // ── Named-node lookup ─────────────────────────────────────────────────────
+
+    private void NavigateToNamedNode(string nodeName)
+    {
+        GameObject node = GameObject.Find(nodeName);
+        if (node != null)
+            NavigateTo(node);
+        else
+        {
+            Debug.LogWarning($"[NavigationAgent] Node '{nodeName}' not found — wandering instead.");
+            NavigateTo(nCont.GetRandomRoom());
+        }
     }
 
     // ── Target setting ────────────────────────────────────────────────────────
+
+    /// <summary>Begins navigating to a room GameObject.</summary>
+    public void NavigateTo(GameObject room)
+    {
+        targetRoom = room;
+        SetTarget(room);
+    }
 
     public void SetTarget(GameObject room)
     {
         targetRoom = room;
         target = nCont.GetRandomPointInRoom(targetRoom);
+
         nmAgent.SetDestination(target);
         nmAgent.isStopped = false;
+
         CreateStepper(CheckDistToTarget, 1, 100);
         CreateStepper(Move, 1, 105);
     }
 
-    // ── Core movement (unchanged) ─────────────────────────────────────────────
+    // ── Arrival ───────────────────────────────────────────────────────────────
 
     void CheckDistToTarget()
     {
-        float d = Vector3.Distance(this.transform.position, target);
+        float d = Vector3.Distance(transform.position, target);
         if (d < nCont.distToTargetThreshold)
         {
             isNearTarget = true;
@@ -68,7 +183,7 @@ public class NavigationAgent : AbstractAgent
             DestroyStepper("CheckDistToTarget");
             DestroyStepper("Move");
 
-            // Arrived at a call station — attempt to register, fall back to stairs if full
+            // Elevator-specific arrival handling (unchanged)
             if (_pendingCallStation != null)
             {
                 ElevatorCallStation station = _pendingCallStation;
@@ -76,11 +191,22 @@ public class NavigationAgent : AbstractAgent
                 _pendingCallStation = null;
 
                 bool accepted = station.TryRegisterWaitingAgent(this, destFloor);
-                if (!accepted)
-                    TakeStairs(targetRoom);
+                if (!accepted) TakeStairs(targetRoom);
                 return;
             }
 
+            // Notify schedule that we arrived, then apply the returned command.
+            if (_schedule != null)
+            {
+                ScheduleCommand arrivalCmd = _schedule.NotifyArrived(_time);
+                if (arrivalCmd.Changed)
+                {
+                    ApplyCommand(arrivalCmd);
+                    return;
+                }
+            }
+
+            // Default: set up a stationary wait (legacy behaviour).
             SetupStationary();
         }
         else
@@ -89,15 +215,27 @@ public class NavigationAgent : AbstractAgent
         }
     }
 
+    // ── Core movement (unchanged) ─────────────────────────────────────────────
+
     void Move()
     {
         if (_isRiding) return;
 
         nmAgent.velocity = Vector3.zero;
-        nmAgent.nextPosition = this.transform.position + nmAgent.desiredVelocity * 0.03f;
+        nmAgent.nextPosition = transform.position + nmAgent.desiredVelocity * 0.03f;
         transform.LookAt(nmAgent.nextPosition, Vector3.up);
         transform.position = nmAgent.nextPosition;
     }
+
+    void StopMoving()
+    {
+        nmAgent.isStopped = true;
+        DestroyStepper("CheckDistToTarget");
+        DestroyStepper("Move");
+        DestroyStepper("Stay");
+    }
+
+    // ── Stationary wait ───────────────────────────────────────────────────────
 
     void SetupStationary()
     {
@@ -125,12 +263,21 @@ public class NavigationAgent : AbstractAgent
         timeSpentSitting++;
         if (timeSpentSitting > stationaryDuration)
         {
-            SetNewTarget();
             DestroyStepper("Stay");
+
+            // Let the schedule decide what to do after the wait.
+            if (_schedule != null)
+            {
+                ScheduleCommand cmd = _schedule.NotifyActivityTimer(_time, nCont);
+                if (cmd.Changed) { ApplyCommand(cmd); return; }
+            }
+
+            // Fallback: legacy random room navigation.
+            SetNewTarget();
         }
     }
 
-    // ── Floor-aware target selection ──────────────────────────────────────────
+    // ── Legacy floor-aware target selection (unchanged, kept as fallback) ──────
 
     void SetNewTarget()
     {
@@ -145,13 +292,11 @@ public class NavigationAgent : AbstractAgent
         }
 
         ElevatorCallStation station = GetBestStationForFloor(thisFloor);
-        if (station != null)
-            StartElevatorJourney(newRoom, newFloor, station);
-        else
-            TakeStairs(newRoom);
+        if (station != null) StartElevatorJourney(newRoom, newFloor, station);
+        else TakeStairs(newRoom);
     }
 
-    // ── Elevator journey ──────────────────────────────────────────────────────
+    // ── Elevator journey (unchanged) ──────────────────────────────────────────
 
     private void StartElevatorJourney(GameObject destinationRoom, int destFloor,
                                        ElevatorCallStation station)
@@ -170,8 +315,6 @@ public class NavigationAgent : AbstractAgent
 
     private void TakeStairs(GameObject room) => SetTarget(room);
 
-    // ── Called by ElevatorCallStation / ElevatorController ───────────────────
-
     public void BoardElevator(ElevatorController elevator)
     {
         _elevator = elevator;
@@ -182,15 +325,11 @@ public class NavigationAgent : AbstractAgent
 
     public void ExitElevator(int floorIndex)
     {
-        // Get the call station position on this floor before releasing the elevator ref
         Vector3 exitPosition = _elevator.GetCallStationPosition(floorIndex);
-
         _elevator.ExitAgent(this);
         _elevator = null;
         _isRiding = false;
 
-        // Warp to the call station so the agent is guaranteed on the NavMesh,
-        // in open space, not behind the elevator cage
         transform.position = exitPosition;
         nmAgent.Warp(exitPosition);
         nmAgent.isStopped = false;
@@ -228,10 +367,6 @@ public class NavigationAgent : AbstractAgent
         return best;
     }
 
-    /// <summary>
-    /// Loops all stations on this floor (one per elevator) and returns the
-    /// viable one with the fewest riders + waiters. Returns null if none are viable.
-    /// </summary>
     private ElevatorCallStation GetBestStationForFloor(int floor)
     {
         ElevatorCallStation best = null;
@@ -245,7 +380,6 @@ public class NavigationAgent : AbstractAgent
             int load = s.WaitingCount + s.elevatorController.RiderCount;
             if (load < bestLoad) { bestLoad = load; best = s; }
         }
-
         return best;
     }
 }
