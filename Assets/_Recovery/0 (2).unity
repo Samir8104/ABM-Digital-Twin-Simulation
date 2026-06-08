@@ -13305,6 +13305,67 @@ MeshCollider:
   m_Convex: 0
   m_CookingOptions: 30
   m_Mesh: {fileID: -4579967923012327292, guid: 85bc0cc5a2e8bcb4092f07103b00b52d, type: 3}
+--- !u!1001 &106055712
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 810463421861684218, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_Name
+      value: 'Bathroom '
+      objectReference: {fileID: 0}
+    - target: {fileID: 6476537270729023990, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: roomNumber
+      value: 117
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -24.147
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 5.538353
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -7.573
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
 --- !u!1 &106085971 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 4465310781240950172, guid: 85bc0cc5a2e8bcb4092f07103b00b52d, type: 3}
@@ -36967,6 +37028,67 @@ MeshCollider:
   m_Convex: 0
   m_CookingOptions: 30
   m_Mesh: {fileID: -5707533275508225281, guid: 85bc0cc5a2e8bcb4092f07103b00b52d, type: 3}
+--- !u!1001 &283801045
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 810463421861684218, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_Name
+      value: Bathroom
+      objectReference: {fileID: 0}
+    - target: {fileID: 6476537270729023990, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: roomNumber
+      value: 117
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -15.32
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 5.538353
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -7.573
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7879609529749246402, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 9663d00b2cdc2494c887bec7f35d86e4, type: 3}
 --- !u!1 &284964190 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -1172244920660167021, guid: 85bc0cc5a2e8bcb4092f07103b00b52d, type: 3}
@@ -269993,7 +270115,7 @@ MonoBehaviour:
   courseData: {fileID: 11400000, guid: 81f412426450b5a4f9a62b206eccb092, type: 2}
   spawnRoot: {fileID: 998138343}
   spawnRadius: 3
-  maxTotalAgents: 75
+  maxTotalAgents: 50
 --- !u!4 &1877312287
 Transform:
   m_ObjectHideFlags: 0
@@ -281979,7 +282101,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: '::'
   timeMultipler: 180
   timeText: {fileID: 1275460631}
-  startHour: 10
+  startHour: 9
   endHour: 20
 --- !u!4 &1976079724
 Transform:
@@ -305183,6 +305305,8 @@ SceneRoots:
   - {fileID: 462219842}
   - {fileID: 1702720845}
   - {fileID: 127388779}
+  - {fileID: 283801045}
+  - {fileID: 106055712}
   - {fileID: 161001925}
   - {fileID: 1370390495}
   - {fileID: 935484325}

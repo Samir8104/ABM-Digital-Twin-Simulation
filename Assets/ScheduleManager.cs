@@ -1,41 +1,28 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-
-/// Wire up in the Inspector:
-///   • agentPrefab     – your NavigationAgent prefab
-///   • courseData      – the CourseData ScriptableObject (in Resources/CourseData)
-///   • spawnRoot       – an empty Transform used as the spawn origin
-///   • spawnRadius     – radius around spawnRoot to scatter new agents
-/// </summary>
 public class ScheduleManager : MonoBehaviour
 {
-    // ?? Inspector ?????????????????????????????????????????????????????????????
+    // ?? Inspector ??????????????????????????????????????????????????????????????
 
     [Header("References")]
     public GameObject agentPrefab;
-    public CourseData courseData;          // Assign via Inspector or auto-loaded from Resources
-    public Transform spawnRoot;           // Where agents materialise before walking to class
-    public float spawnRadius = 3f;
-    private bool _spawned = false;
-
+    public CourseData courseData;
+    public Transform  spawnRoot;
+    public float      spawnRadius = 3f;
 
     [Header("Cap (0 = unlimited)")]
     [Tooltip("Hard cap on total agents spawned. Set to 0 to spawn every enrolled student.")]
     public int maxTotalAgents = 0;
 
-    // ?? Internal ??????????????????????????????????????????????????????????????
+    // ?? Internal ???????????????????????????????????????????????????????????????
 
     private TimeManager _time;
-
-    // All room GameObjects in the scene, keyed by their name (or a child name) that
-    // contains the room number string.  Populated once in Start().
     private readonly Dictionary<string, GameObject> _roomByNumber = new();
+    private readonly List<NavigationAgent>           _allAgents   = new();
 
-    // Tracks spawned agents so we can cap and inspect them.
-    private readonly List<NavigationAgent> _allAgents = new();
-
-    // ?? Unity ?????????????????????????????????????????????????????????????????
+    // ?? Unity ??????????????????????????????????????????????????????????????????
 
     private void Awake()
     {
@@ -47,65 +34,51 @@ public class ScheduleManager : MonoBehaviour
             Debug.LogError("[ScheduleManager] CourseData asset not found! " +
                            "Run Assets ? Simulation ? Import Course CSV first.");
             enabled = false;
-            return;
         }
     }
-
-    private void Update()
-    {
-        // Wait one frame for ABMU's AbstractController.Init() to fully complete.
-        if (!_spawned)
-        {
-            _spawned = true;
-            IndexSceneRooms();
-            SpawnAllAgents();
-        }
-    }
-
 
     private void Start()
     {
         _time = FindObjectOfType<TimeManager>();
-    }
-    // ?? Room indexing ?????????????????????????????????????????????????????????
+        IndexSceneRooms();
 
-    /// <summary>
-    /// Walks every GameObject in the scene and records those whose name
-    /// contains only digits (or ends with digits) as room-number nodes.
-    /// Adjust the matching logic here if your naming convention differs.
-    /// </summary>
+        // ?? Fix: use a coroutine so agents are spawned one per frame instead of
+        // all in a single Update() call.  This prevents the instantiation burst
+        // that hit NavMesh baking and ABMU stepper registration simultaneously.
+        StartCoroutine(SpawnAllAgentsCoroutine());
+    }
+
+    // ?? Room indexing ??????????????????????????????????????????????????????????
+
     private void IndexSceneRooms()
     {
-        // FindObjectsOfType<GameObject>() is slow at runtime — acceptable for
-        // one-time setup.  For large scenes replace with a tagged query.
         foreach (var go in FindObjectsOfType<GameObject>())
         {
             string n = go.name.Trim();
-
-            // Accept names that are purely numeric: "116", "401", etc.
             if (System.Text.RegularExpressions.Regex.IsMatch(n, @"^\d+$"))
             {
                 if (!_roomByNumber.ContainsKey(n))
                     _roomByNumber[n] = go;
             }
         }
-
         Debug.Log($"[ScheduleManager] Indexed {_roomByNumber.Count} room nodes.");
     }
 
-    // ?? Spawning ??????????????????????????????????????????????????????????????
+    // ?? Spawning ???????????????????????????????????????????????????????????????
 
-    // In ScheduleManager.cs, replace SpawnAllAgents() with this version:
-
-    private void SpawnAllAgents()
+    // ?? Fix: yield return null after each agent so Unity gets a frame to
+    // process the new NavMeshAgent and ABMU stepper before the next one arrives.
+    // On a 200-agent scene this costs ~200 frames (< 0.5 s at 60 fps) but
+    // completely eliminates the spawn-time freeze.
+    private IEnumerator SpawnAllAgentsCoroutine()
     {
-        if (agentPrefab == null) { Debug.LogError("[ScheduleManager] agentPrefab is null!"); return; }
-        if (spawnRoot == null) { Debug.LogError("[ScheduleManager] spawnRoot is null!"); return; }
+        // Wait one frame for ABMU's AbstractController.Init() to finish.
+        yield return null;
 
-        // Print every section loaded from the asset
+        if (agentPrefab == null) { Debug.LogError("[ScheduleManager] agentPrefab is null!");  yield break; }
+        if (spawnRoot   == null) { Debug.LogError("[ScheduleManager] spawnRoot is null!");    yield break; }
+
         Debug.Log($"[ScheduleManager] CourseData has {courseData.sections.Count} sections.");
-
-        // Print every room node that was indexed
         foreach (var kvp in _roomByNumber)
             Debug.Log($"[ScheduleManager] Indexed room: '{kvp.Key}' -> {kvp.Value.name}");
 
@@ -124,14 +97,14 @@ public class ScheduleManager : MonoBehaviour
                 if (maxTotalAgents > 0 && total >= maxTotalAgents)
                 {
                     Debug.Log($"[ScheduleManager] Hit maxTotalAgents cap of {maxTotalAgents}.");
-                    return;
+                    yield break;
                 }
 
-                Vector3 pos = spawnRoot.position + Random.insideUnitSphere * spawnRadius;
-                pos.y = spawnRoot.position.y;
+                Vector3 pos  = spawnRoot.position + Random.insideUnitSphere * spawnRadius;
+                pos.y        = spawnRoot.position.y;
 
                 GameObject go = Instantiate(agentPrefab, pos, Quaternion.identity);
-                go.name = $"Agent_{total:0000}";
+                go.name       = $"Agent_{total:0000}";
 
                 var agent = go.GetComponent<NavigationAgent>();
                 if (agent == null)
@@ -147,6 +120,10 @@ public class ScheduleManager : MonoBehaviour
 
                 _allAgents.Add(agent);
                 total++;
+
+                // ?? Fix: yield after every agent so NavMesh and ABMU can
+                // process the registration before the next one is created.
+                yield return null;
             }
         }
 

@@ -127,7 +127,6 @@ public class NavigationAgent : AbstractAgent
 
     void DeferredInit()
     {
-        Debug.Log($"[{name}] DeferredInit tick — nCont:{nCont != null} time:{_time != null} schedule:{_schedule != null} initialized:{_scheduleInitialized}");
 
         if (nCont == null || _time == null || _schedule == null) return;
         if (_scheduleInitialized)
@@ -139,7 +138,6 @@ public class NavigationAgent : AbstractAgent
         _scheduleInitialized = true;
         SafeDestroyStepper("DeferredInit");
 
-        Debug.Log($"[{name}] DeferredInit complete — launching ScheduleTick");
         SafeCreateStepper("ScheduleTick", ScheduleTick, 30, 1);
     }
 
@@ -149,38 +147,31 @@ public class NavigationAgent : AbstractAgent
     {
         if (_schedule == null || _time == null || nCont == null)
         {
-            Debug.LogWarning($"[{name}] ScheduleTick — missing refs, skipping");
             return;
         }
 
         int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
         bool classToday = _schedule.SectionMeetsToday(_time);
 
-        Debug.Log($"[{name}] ScheduleTick — activity:{_schedule.CurrentActivity} " +
-                  $"time:{_time.CurrentHour:00}:{_time.CurrentMinute:00} ({simMinute}min) " +
-                  $"classToday:{classToday} startMin:{_schedule.StartMinute} endMin:{_schedule.EndMinute} " +
-                  $"isRiding:{_isRiding}");
-
+       
+        // if the silly agent is on an elevator
         if (_isRiding) return;
 
         switch (_schedule.CurrentActivity)
         {
             case AgentActivity.Idle:
-                if (classToday && simMinute >= _schedule.StartMinute - 5)
+                if (classToday && simMinute >= _schedule.StartMinute - 10)
                 {
-                    Debug.Log($"[{name}] → Going to class in room {_classroomNode?.name}");
                     _schedule.SetActivity(AgentActivity.GoingToClass);
                     NavigateTo(_classroomNode);
                 }
                 else if (!classToday)
                 {
-                    Debug.Log($"[{name}] → No class today, wandering");
                     _schedule.SetActivity(AgentActivity.Wandering);
                     NavigateTo(nCont.GetRandomRoom());
                 }
                 else
                 {
-                    Debug.Log($"[{name}] → Idle, waiting for class. Need simMinute >= {_schedule.StartMinute - 5}, currently {simMinute}");
                 }
                 break;
 
@@ -188,18 +179,13 @@ public class NavigationAgent : AbstractAgent
                 if (simMinute >= _schedule.EndMinute)
                 {
                     Debug.Log($"[{name}] → Class over at {simMinute}, leaving");
-                    // NOTE: Do NOT call PickAndDoRandomActivity here.
-                    // SetActivity triggers the post-class flow from the arrival handler
-                    // so we stay in one consistent code path. The agent is already
-                    // stationary (nmAgent.isStopped = true from CheckDistToTarget arrival),
-                    // so we just kick off the next random activity from here safely.
+
                     _schedule.SetActivity(AgentActivity.Wandering);
                     PickAndDoRandomActivity(simMinute);
                 }
                 break;
 
             case AgentActivity.Done:
-                Debug.Log($"[{name}] → Done for the day, deactivating");
                 SafeDestroyStepper("ScheduleTick");
                 gameObject.SetActive(false);
                 break;
@@ -210,19 +196,16 @@ public class NavigationAgent : AbstractAgent
 
     void PickAndDoRandomActivity(int simMinute)
     {
-        // Possibly leave for the day after class ends
         if (_schedule.AttendedToday && simMinute > _schedule.EndMinute + 60)
         {
             if (Random.value < 0.30f)
             {
-                Debug.Log($"[{name}] Decided to leave for the day");
                 _schedule.SetActivity(AgentActivity.Done);
                 return;
             }
         }
 
         float roll = Random.value;
-        Debug.Log($"[{name}] PickAndDoRandomActivity — roll:{roll:F2}");
 
         if (roll < 0.35f)
         {
@@ -236,12 +219,13 @@ public class NavigationAgent : AbstractAgent
         }
         else if (roll < 0.85f)
         {
-            _schedule.SetActivity(AgentActivity.Chatting);
+            _schedule.SetActivity(AgentActivity.Chatting); // TODO: Make it so the agent heads to a node called 'chattingarea' instead of a random classroom
             NavigateTo(nCont.GetRandomRoom());
         }
         else
         {
-            _schedule.SetActivity(AgentActivity.Wandering);
+            _schedule.SetActivity(AgentActivity.Wandering); // Wandering and chatting are the same thing, I feel like it would be better if the agent just left the building atp. 
+            // TODO: Make the agent leave the building instead of wander.
             NavigateTo(nCont.GetRandomRoom());
         }
     }
@@ -252,9 +236,8 @@ public class NavigationAgent : AbstractAgent
     {
         float d = Vector3.Distance(transform.position, target);
 
-        if (d < nCont.distToTargetThreshold)
+        if (d < nCont.distToTargetThreshold) // if the agent is next to the target
         {
-            Debug.Log($"[{name}] Arrived at {targetRoom?.name} — activity:{_schedule?.CurrentActivity} pendingStation:{_pendingCallStation != null}");
 
             isNearTarget = true;
             nmAgent.isStopped = true;
@@ -265,13 +248,11 @@ public class NavigationAgent : AbstractAgent
 
             if (_pendingCallStation != null)
             {
-                Debug.Log($"[{name}] Arrived at elevator call station on floor {_pendingCallStation.floorIndex}");
                 ElevatorCallStation station = _pendingCallStation;
                 int destFloor = _pendingDestFloor;
                 _pendingCallStation = null;
 
                 bool accepted = station.TryRegisterWaitingAgent(this, destFloor);
-                Debug.Log($"[{name}] Elevator registration: {(accepted ? "ACCEPTED" : "REJECTED — taking stairs")}");
                 if (!accepted) TakeStairs(targetRoom);
                 return;
             }
@@ -279,41 +260,37 @@ public class NavigationAgent : AbstractAgent
             int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
 
             switch (_schedule.CurrentActivity)
+                //Once the agent has arrived at its location, it waits a certain amount of time depending on the state of the agent
+                // The performance hit has to happen somewhere here, just dont know why yet. 
             {
                 case AgentActivity.GoingToClass:
-                    Debug.Log($"[{name}] Arrived at class — waiting until {_schedule.EndMinute} min");
                     _schedule.SetActivity(AgentActivity.InClass);
                     // ScheduleTick will detect InClass → past EndMinute and call PickAndDoRandomActivity
                     break;
 
                 case AgentActivity.GoingToBathroom:
                     int bathroomTime = Random.Range(2, 6);
-                    Debug.Log($"[{name}] Arrived at bathroom — staying {bathroomTime} sim-minutes");
                     _schedule.SetActivity(AgentActivity.InBathroom);
                     StartTimedStay(bathroomTime);
                     break;
 
                 case AgentActivity.GoingToOfficeHours:
                     int ohTime = Random.Range(10, 30);
-                    Debug.Log($"[{name}] Arrived at office hours — staying {ohTime} sim-minutes");
                     _schedule.SetActivity(AgentActivity.InOfficeHours);
                     StartTimedStay(ohTime);
                     break;
 
                 case AgentActivity.Chatting:
                     int chatTime = Random.Range(2, 8);
-                    Debug.Log($"[{name}] Arrived to chat — staying {chatTime} sim-minutes");
                     StartTimedStay(chatTime);
                     break;
 
                 case AgentActivity.Wandering:
                     int wanderTime = Random.Range(3, 12);
-                    Debug.Log($"[{name}] Arrived while wandering — staying {wanderTime} sim-minutes");
                     StartTimedStay(wanderTime);
                     break;
 
                 default:
-                    Debug.LogWarning($"[{name}] Arrived but unhandled activity: {_schedule.CurrentActivity}");
                     break;
             }
         }
@@ -330,17 +307,15 @@ public class NavigationAgent : AbstractAgent
     void StartTimedStay(int simMinutes)
     {
         _stayMinutesRemaining = simMinutes;
-        SafeCreateStepper("StayInPlace", StayInPlace, 30, 2);
+        SafeCreateStepper("StayInPlace", StayInPlace, 60, 2);
     }
 
     void StayInPlace()
     {
         _stayMinutesRemaining--;
-        Debug.Log($"[{name}] StayInPlace — {_stayMinutesRemaining} ticks remaining, activity:{_schedule.CurrentActivity}");
 
         if (_stayMinutesRemaining <= 0)
         {
-            Debug.Log($"[{name}] StayInPlace done — picking next activity");
             SafeDestroyStepper("StayInPlace");
             int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
             PickAndDoRandomActivity(simMinute);
@@ -353,23 +328,18 @@ public class NavigationAgent : AbstractAgent
     {
         if (room == null)
         {
-            Debug.LogWarning($"[{name}] NavigateTo called with null room!");
             return;
         }
 
-        Debug.Log($"[{name}] NavigateTo: {room.name}");
 
         int newFloor = GetFloorOfRoom(room);
         int thisFloor = GetFloorOfRoom(targetRoom);
 
-        Debug.Log($"[{name}] Floor check — thisFloor:{thisFloor} newFloor:{newFloor}");
 
         if (newFloor != thisFloor && newFloor >= 0 && thisFloor >= 0)
         {
             ElevatorCallStation station = GetBestStationForFloor(thisFloor);
-            Debug.Log($"[{name}] Different floor — elevator station found: {station != null}");
             if (station != null) { StartElevatorJourney(room, newFloor, station); return; }
-            Debug.Log($"[{name}] No elevator available — taking stairs");
         }
 
         SetTarget(room);
