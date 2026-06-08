@@ -1,0 +1,860 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7894094348d4e0b4e99f481c9320c4cf, type: 3}
+  m_Name: CourseData
+  m_EditorClassIdentifier: Assembly-CSharp::CourseData
+  sections:
+  - roomNumber: 117
+    startMinute: 645
+    endMinute: 720
+    totalEnrolled: 40
+    meetingDays: 5
+  - roomNumber: 117
+    startMinute: 805
+    endMinute: 855
+    totalEnrolled: 75
+    meetingDays: 21
+  - roomNumber: 117
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 75
+    meetingDays: 10
+  - roomNumber: 123
+    startMinute: 960
+    endMinute: 1035
+    totalEnrolled: 45
+    meetingDays: 5
+  - roomNumber: 401
+    startMinute: 690
+    endMinute: 765
+    totalEnrolled: 40
+    meetingDays: 10
+  - roomNumber: 124
+    startMinute: 960
+    endMinute: 1035
+    totalEnrolled: 15
+    meetingDays: 5
+  - roomNumber: 116
+    startMinute: 740
+    endMinute: 790
+    totalEnrolled: 35
+    meetingDays: 21
+  - roomNumber: 405
+    startMinute: 545
+    endMinute: 595
+    totalEnrolled: 5
+    meetingDays: 21
+  - roomNumber: 405
+    startMinute: 675
+    endMinute: 725
+    totalEnrolled: 5
+    meetingDays: 21
+  - roomNumber: 405
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 5
+    meetingDays: 10
+  - roomNumber: 405
+    startMinute: 610
+    endMinute: 660
+    totalEnrolled: 5
+    meetingDays: 21
+  - roomNumber: 405
+    startMinute: 510
+    endMinute: 585
+    totalEnrolled: 5
+    meetingDays: 10
+  - roomNumber: 127
+    startMinute: 690
+    endMinute: 765
+    totalEnrolled: 5
+    meetingDays: 10
+  - roomNumber: 405
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 5
+    meetingDays: 10
+  - roomNumber: 405
+    startMinute: 960
+    endMinute: 1035
+    totalEnrolled: 5
+    meetingDays: 10
+  - roomNumber: 405
+    startMinute: 1050
+    endMinute: 1215
+    totalEnrolled: 5
+    meetingDays: 8
+  - roomNumber: 405
+    startMinute: 740
+    endMinute: 790
+    totalEnrolled: 5
+    meetingDays: 21
+  - roomNumber: 405
+    startMinute: 805
+    endMinute: 855
+    totalEnrolled: 5
+    meetingDays: 21
+  - roomNumber: 116
+    startMinute: 960
+    endMinute: 1035
+    totalEnrolled: 85
+    meetingDays: 5
+  - roomNumber: 117
+    startMinute: 870
+    endMinute: 1035
+    totalEnrolled: 5
+    meetingDays: 4
+  - roomNumber: 127
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 5
+    meetingDays: 10
+  - roomNumber: 124
+    startMinute: 960
+    endMinute: 1035
+    totalEnrolled: 75
+    meetingDays: 2
+  - roomNumber: 124
+    startMinute: 1050
+    endMinute: 1125
+    totalEnrolled: 75
+    meetingDays: 2
+  - roomNumber: 117
+    startMinute: 960
+    endMinute: 1125
+    totalEnrolled: 75
+    meetingDays: 1
+  - roomNumber: 118
+    startMinute: 805
+    endMinute: 855
+    totalEnrolled: 30
+    meetingDays: 21
+  - roomNumber: 118
+    startMinute: 1020
+    endMinute: 1095
+    totalEnrolled: 20
+    meetingDays: 10
+  - roomNumber: 117
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 50
+    meetingDays: 2
+  - roomNumber: 117
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 50
+    meetingDays: 8
+  - roomNumber: 117
+    startMinute: 960
+    endMinute: 1035
+    totalEnrolled: 50
+    meetingDays: 2
+  - roomNumber: 116
+    startMinute: 610
+    endMinute: 660
+    totalEnrolled: 69
+    meetingDays: 16
+  - roomNumber: 124
+    startMinute: 690
+    endMinute: 765
+    totalEnrolled: 180
+    meetingDays: 10
+  - roomNumber: 203
+    startMinute: 870
+    endMinute: 1035
+    totalEnrolled: 23
+    meetingDays: 2
+  - roomNumber: 203
+    startMinute: 870
+    endMinute: 1035
+    totalEnrolled: 23
+    meetingDays: 1
+  - roomNumber: 203
+    startMinute: 870
+    endMinute: 1035
+    totalEnrolled: 23
+    meetingDays: 8
+  - roomNumber: 123
+    startMinute: 610
+    endMinute: 660
+    totalEnrolled: 40
+    meetingDays: 4
+  - roomNumber: 123
+    startMinute: 740
+    endMinute: 790
+    totalEnrolled: 45
+    meetingDays: 21
+  - roomNumber: 203
+    startMinute: 675
+    endMinute: 725
+    totalEnrolled: 15
+    meetingDays: 21
+  - roomNumber: 401
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 25
+    meetingDays: 5
+  - roomNumber: 405
+    startMinute: 690
+    endMinute: 765
+    totalEnrolled: 20
+    meetingDays: 10
+  - roomNumber: 401
+    startMinute: 960
+    endMinute: 1035
+    totalEnrolled: 15
+    meetingDays: 5
+  - roomNumber: 127
+    startMinute: 1050
+    endMinute: 1200
+    totalEnrolled: 40
+    meetingDays: 1
+  - roomNumber: 127
+    startMinute: 960
+    endMinute: 1035
+    totalEnrolled: 48
+    meetingDays: 5
+  - roomNumber: 201
+    startMinute: 1050
+    endMinute: 1215
+    totalEnrolled: 5
+    meetingDays: 4
+  - roomNumber: 203
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 5
+    meetingDays: 10
+  - roomNumber: 401
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 40
+    meetingDays: 10
+  - roomNumber: 123
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 40
+    meetingDays: 10
+  - roomNumber: 127
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 48
+    meetingDays: 10
+  - roomNumber: 123
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 24
+    meetingDays: 5
+  - roomNumber: 118
+    startMinute: 870
+    endMinute: 1035
+    totalEnrolled: 30
+    meetingDays: 4
+  - roomNumber: 117
+    startMinute: 510
+    endMinute: 585
+    totalEnrolled: 20
+    meetingDays: 10
+  - roomNumber: 117
+    startMinute: 510
+    endMinute: 585
+    totalEnrolled: 20
+    meetingDays: 10
+  - roomNumber: 431
+    startMinute: 480
+    endMinute: 660
+    totalEnrolled: 20
+    meetingDays: 16
+  - roomNumber: 116
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 80
+    meetingDays: 10
+  - roomNumber: 117
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 80
+    meetingDays: 10
+  - roomNumber: 118
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 30
+    meetingDays: 10
+  - roomNumber: 118
+    startMinute: 740
+    endMinute: 790
+    totalEnrolled: 30
+    meetingDays: 21
+  - roomNumber: 118
+    startMinute: 870
+    endMinute: 1035
+    totalEnrolled: 25
+    meetingDays: 1
+  - roomNumber: 401
+    startMinute: 960
+    endMinute: 1035
+    totalEnrolled: 18
+    meetingDays: 10
+  - roomNumber: 420
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 30
+    meetingDays: 10
+  - roomNumber: 127
+    startMinute: 610
+    endMinute: 660
+    totalEnrolled: 35
+    meetingDays: 21
+  - roomNumber: 201
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 15
+    meetingDays: 10
+  - roomNumber: 431
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 20
+    meetingDays: 10
+  - roomNumber: 201
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 5
+    meetingDays: 10
+  - roomNumber: 431
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 10
+    meetingDays: 10
+  - roomNumber: 116
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 10
+    meetingDays: 10
+  - roomNumber: 431
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 10
+    meetingDays: 10
+  - roomNumber: 203
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 5
+    meetingDays: 10
+  - roomNumber: 117
+    startMinute: 870
+    endMinute: 1035
+    totalEnrolled: 10
+    meetingDays: 4
+  - roomNumber: 116
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 3
+    meetingDays: 10
+  - roomNumber: 431
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 10
+    meetingDays: 10
+  - roomNumber: 203
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 5
+    meetingDays: 10
+  - roomNumber: 117
+    startMinute: 870
+    endMinute: 1035
+    totalEnrolled: 10
+    meetingDays: 4
+  - roomNumber: 201
+    startMinute: 1050
+    endMinute: 1215
+    totalEnrolled: 5
+    meetingDays: 4
+  - roomNumber: 118
+    startMinute: 610
+    endMinute: 660
+    totalEnrolled: 15
+    meetingDays: 4
+  - roomNumber: 125
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 180
+    meetingDays: 10
+  - roomNumber: 124
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 100
+    meetingDays: 5
+  - roomNumber: 106
+    startMinute: 480
+    endMinute: 645
+    totalEnrolled: 20
+    meetingDays: 1
+  - roomNumber: 106
+    startMinute: 675
+    endMinute: 840
+    totalEnrolled: 20
+    meetingDays: 1
+  - roomNumber: 106
+    startMinute: 870
+    endMinute: 1035
+    totalEnrolled: 20
+    meetingDays: 1
+  - roomNumber: 106
+    startMinute: 870
+    endMinute: 1035
+    totalEnrolled: 20
+    meetingDays: 2
+  - roomNumber: 106
+    startMinute: 480
+    endMinute: 645
+    totalEnrolled: 20
+    meetingDays: 4
+  - roomNumber: 106
+    startMinute: 675
+    endMinute: 840
+    totalEnrolled: 20
+    meetingDays: 4
+  - roomNumber: 106
+    startMinute: 870
+    endMinute: 1035
+    totalEnrolled: 20
+    meetingDays: 4
+  - roomNumber: 106
+    startMinute: 870
+    endMinute: 1035
+    totalEnrolled: 20
+    meetingDays: 8
+  - roomNumber: 106
+    startMinute: 1050
+    endMinute: 1215
+    totalEnrolled: 20
+    meetingDays: 2
+  - roomNumber: 401
+    startMinute: 740
+    endMinute: 790
+    totalEnrolled: 40
+    meetingDays: 21
+  - roomNumber: 303
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 18
+    meetingDays: 10
+  - roomNumber: 301
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 20
+    meetingDays: 10
+  - roomNumber: 401
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 40
+    meetingDays: 10
+  - roomNumber: 401
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 16
+    meetingDays: 5
+  - roomNumber: 401
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 4
+    meetingDays: 5
+  - roomNumber: 405
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 15
+    meetingDays: 10
+  - roomNumber: 405
+    startMinute: 960
+    endMinute: 1125
+    totalEnrolled: 15
+    meetingDays: 1
+  - roomNumber: 124
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 190
+    meetingDays: 10
+  - roomNumber: 124
+    startMinute: 510
+    endMinute: 585
+    totalEnrolled: 190
+    meetingDays: 10
+  - roomNumber: 124
+    startMinute: 960
+    endMinute: 1035
+    totalEnrolled: 85
+    meetingDays: 5
+  - roomNumber: 127
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 19
+    meetingDays: 10
+  - roomNumber: 125
+    startMinute: 610
+    endMinute: 660
+    totalEnrolled: 175
+    meetingDays: 21
+  - roomNumber: 125
+    startMinute: 545
+    endMinute: 595
+    totalEnrolled: 180
+    meetingDays: 21
+  - roomNumber: 125
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 180
+    meetingDays: 10
+  - roomNumber: 125
+    startMinute: 740
+    endMinute: 790
+    totalEnrolled: 180
+    meetingDays: 21
+  - roomNumber: 110
+    startMinute: 480
+    endMinute: 645
+    totalEnrolled: 25
+    meetingDays: 16
+  - roomNumber: 110
+    startMinute: 480
+    endMinute: 645
+    totalEnrolled: 25
+    meetingDays: 1
+  - roomNumber: 110
+    startMinute: 675
+    endMinute: 840
+    totalEnrolled: 25
+    meetingDays: 1
+  - roomNumber: 110
+    startMinute: 870
+    endMinute: 1035
+    totalEnrolled: 25
+    meetingDays: 1
+  - roomNumber: 110
+    startMinute: 690
+    endMinute: 855
+    totalEnrolled: 26
+    meetingDays: 2
+  - roomNumber: 110
+    startMinute: 510
+    endMinute: 675
+    totalEnrolled: 25
+    meetingDays: 2
+  - roomNumber: 110
+    startMinute: 870
+    endMinute: 1035
+    totalEnrolled: 25
+    meetingDays: 2
+  - roomNumber: 110
+    startMinute: 480
+    endMinute: 645
+    totalEnrolled: 25
+    meetingDays: 4
+  - roomNumber: 110
+    startMinute: 675
+    endMinute: 840
+    totalEnrolled: 25
+    meetingDays: 4
+  - roomNumber: 110
+    startMinute: 870
+    endMinute: 1035
+    totalEnrolled: 25
+    meetingDays: 4
+  - roomNumber: 110
+    startMinute: 510
+    endMinute: 675
+    totalEnrolled: 25
+    meetingDays: 8
+  - roomNumber: 110
+    startMinute: 690
+    endMinute: 855
+    totalEnrolled: 25
+    meetingDays: 8
+  - roomNumber: 110
+    startMinute: 870
+    endMinute: 1035
+    totalEnrolled: 25
+    meetingDays: 8
+  - roomNumber: 110
+    startMinute: 675
+    endMinute: 840
+    totalEnrolled: 25
+    meetingDays: 16
+  - roomNumber: 110
+    startMinute: 1050
+    endMinute: 1215
+    totalEnrolled: 25
+    meetingDays: 1
+  - roomNumber: 110
+    startMinute: 1050
+    endMinute: 1215
+    totalEnrolled: 25
+    meetingDays: 2
+  - roomNumber: 110
+    startMinute: 1050
+    endMinute: 1215
+    totalEnrolled: 25
+    meetingDays: 4
+  - roomNumber: 116
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 80
+    meetingDays: 5
+  - roomNumber: 201
+    startMinute: 610
+    endMinute: 775
+    totalEnrolled: 20
+    meetingDays: 16
+  - roomNumber: 201
+    startMinute: 510
+    endMinute: 675
+    totalEnrolled: 20
+    meetingDays: 2
+  - roomNumber: 401
+    startMinute: 960
+    endMinute: 1035
+    totalEnrolled: 18
+    meetingDays: 10
+  - roomNumber: 127
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 48
+    meetingDays: 5
+  - roomNumber: 123
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 45
+    meetingDays: 10
+  - roomNumber: 123
+    startMinute: 690
+    endMinute: 765
+    totalEnrolled: 45
+    meetingDays: 10
+  - roomNumber: 118
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 30
+    meetingDays: 10
+  - roomNumber: 105
+    startMinute: 805
+    endMinute: 855
+    totalEnrolled: 12
+    meetingDays: 21
+  - roomNumber: 420
+    startMinute: 480
+    endMinute: 660
+    totalEnrolled: 20
+    meetingDays: 16
+  - roomNumber: 127
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 19
+    meetingDays: 5
+  - roomNumber: 215
+    startMinute: 675
+    endMinute: 855
+    totalEnrolled: 18
+    meetingDays: 4
+  - roomNumber: 116
+    startMinute: 1050
+    endMinute: 1215
+    totalEnrolled: 30
+    meetingDays: 1
+  - roomNumber: 105
+    startMinute: 805
+    endMinute: 855
+    totalEnrolled: 4
+    meetingDays: 21
+  - roomNumber: 203
+    startMinute: 675
+    endMinute: 725
+    totalEnrolled: 4
+    meetingDays: 21
+  - roomNumber: 420
+    startMinute: 480
+    endMinute: 660
+    totalEnrolled: 5
+    meetingDays: 16
+  - roomNumber: 127
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 4
+    meetingDays: 5
+  - roomNumber: 215
+    startMinute: 675
+    endMinute: 855
+    totalEnrolled: 4
+    meetingDays: 4
+  - roomNumber: 116
+    startMinute: 1050
+    endMinute: 1215
+    totalEnrolled: 10
+    meetingDays: 1
+  - roomNumber: 405
+    startMinute: 690
+    endMinute: 765
+    totalEnrolled: 3
+    meetingDays: 10
+  - roomNumber: 401
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 5
+    meetingDays: 5
+  - roomNumber: 401
+    startMinute: 960
+    endMinute: 1035
+    totalEnrolled: 5
+    meetingDays: 5
+  - roomNumber: 116
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 7
+    meetingDays: 10
+  - roomNumber: 203
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 5
+    meetingDays: 10
+  - roomNumber: 405
+    startMinute: 1050
+    endMinute: 1215
+    totalEnrolled: 15
+    meetingDays: 4
+  - roomNumber: 116
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 26
+    meetingDays: 16
+  - roomNumber: 116
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 7
+    meetingDays: 16
+  - roomNumber: 123
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 12
+    meetingDays: 10
+  - roomNumber: 116
+    startMinute: 740
+    endMinute: 790
+    totalEnrolled: 35
+    meetingDays: 21
+  - roomNumber: 124
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 155
+    meetingDays: 10
+  - roomNumber: 124
+    startMinute: 610
+    endMinute: 660
+    totalEnrolled: 175
+    meetingDays: 21
+  - roomNumber: 125
+    startMinute: 675
+    endMinute: 725
+    totalEnrolled: 150
+    meetingDays: 21
+  - roomNumber: 125
+    startMinute: 690
+    endMinute: 765
+    totalEnrolled: 175
+    meetingDays: 10
+  - roomNumber: 125
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 175
+    meetingDays: 10
+  - roomNumber: 124
+    startMinute: 545
+    endMinute: 595
+    totalEnrolled: 165
+    meetingDays: 21
+  - roomNumber: 125
+    startMinute: 510
+    endMinute: 585
+    totalEnrolled: 165
+    meetingDays: 10
+  - roomNumber: 405
+    startMinute: 870
+    endMinute: 1035
+    totalEnrolled: 12
+    meetingDays: 4
+  - roomNumber: 123
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 24
+    meetingDays: 5
+  - roomNumber: 124
+    startMinute: 740
+    endMinute: 790
+    totalEnrolled: 20
+    meetingDays: 5
+  - roomNumber: 124
+    startMinute: 740
+    endMinute: 790
+    totalEnrolled: 20
+    meetingDays: 5
+  - roomNumber: 118
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 30
+    meetingDays: 10
+  - roomNumber: 116
+    startMinute: 960
+    endMinute: 1035
+    totalEnrolled: 75
+    meetingDays: 8
+  - roomNumber: 401
+    startMinute: 870
+    endMinute: 945
+    totalEnrolled: 10
+    meetingDays: 10
+  - roomNumber: 123
+    startMinute: 1050
+    endMinute: 1215
+    totalEnrolled: 30
+    meetingDays: 2
+  - roomNumber: 127
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 40
+    meetingDays: 10
+  - roomNumber: 127
+    startMinute: 960
+    endMinute: 1035
+    totalEnrolled: 48
+    meetingDays: 10
+  - roomNumber: 118
+    startMinute: 675
+    endMinute: 725
+    totalEnrolled: 18
+    meetingDays: 5
+  - roomNumber: 118
+    startMinute: 675
+    endMinute: 725
+    totalEnrolled: 10
+    meetingDays: 5
+  - roomNumber: 124
+    startMinute: 740
+    endMinute: 890
+    totalEnrolled: 150
+    meetingDays: 16
+  - roomNumber: 116
+    startMinute: 690
+    endMinute: 765
+    totalEnrolled: 50
+    meetingDays: 10
+  - roomNumber: 123
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 12
+    meetingDays: 10

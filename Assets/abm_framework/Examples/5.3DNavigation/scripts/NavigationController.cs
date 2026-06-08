@@ -7,15 +7,14 @@ using UnityEngine.AI;
 public class NavigationController : AbstractController
 {
     [Header("Simulation Parameters")]
-    public GameObject agentPrefab;
     public List<GameObject> rooms;
     public float heatmapUpperBound = 0.15f;
     public Gradient heatmapGradient;
-    public int numAgents = 100;
 
     [Header("Agent Parameters")]
     public float distToTargetThreshold = 2f;
     public LayerMask agentLm;
+    public GameObject agentPrefab; // Still needed for GetRandomPointInRoom's baseOffset lookup
 
     [Header("Room Selection Weights")]
     public float lowWeight = 0.1f;
@@ -26,14 +25,7 @@ public class NavigationController : AbstractController
     {
         base.Init();
         rooms = GetAllRooms();
-        for (int i = 0; i < numAgents; i++)
-        {
-            GameObject agent = Instantiate(agentPrefab);
-            NavMeshAgent nmAgent = agent.GetComponent<NavMeshAgent>();
-            nmAgent.Warp(GetRandomPointInRoom(GetRandomRoom()));
-            agent.transform.position = nmAgent.nextPosition;
-            agent.GetComponent<NavigationAgent>().Init(GetRandomRoom());
-        }
+        // No agent spawning here anymore — ScheduleManager.Start() handles it.
     }
 
     public override void Step()
@@ -42,13 +34,15 @@ public class NavigationController : AbstractController
         base.Step();
     }
 
+
+
+    // ── Room selection (unchanged) ────────────────────────────────────────────
+
     public GameObject GetRandomRoom()
     {
         float totalWeight = 0f;
         foreach (var room in rooms)
-        {
             totalWeight += GetWeightForRoom(room);
-        }
 
         float roll = Random.Range(0f, totalWeight);
         float cumulative = 0f;
@@ -56,17 +50,15 @@ public class NavigationController : AbstractController
         foreach (var room in rooms)
         {
             cumulative += GetWeightForRoom(room);
-            if (roll <= cumulative)
-                return room;
+            if (roll <= cumulative) return room;
         }
-
-        return rooms[rooms.Count - 1]; // fallback
+        return rooms[rooms.Count - 1];
     }
 
     float GetWeightForRoom(GameObject room)
     {
         var rp = room.GetComponent<RoomPriority>();
-        if (rp == null) return midWeight; 
+        if (rp == null) return midWeight;
         return rp.priority switch
         {
             RoomPriorityLevel.Low => lowWeight,
@@ -74,6 +66,14 @@ public class NavigationController : AbstractController
             RoomPriorityLevel.High => highWeight,
             _ => midWeight
         };
+    }
+
+
+    public GameObject GetRoomByNumber(string roomNumber)
+    {
+        foreach (var room in rooms)
+            if (room.name.Trim() == roomNumber) return room;
+        return null;
     }
 
     public Vector3 GetRandomPointInRoom(GameObject room)
