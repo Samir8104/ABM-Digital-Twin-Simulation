@@ -1,28 +1,42 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
+/// Spawns agents, assigns their schedules, and wires up scene references.
+///
+/// Key changes from the previous version:
+///   • Enrollment is randomised each run — a shuffled slot list means no two
+///     runs produce the same agent-to-section mapping.
+///   • Agents can hold multiple sections (multi-class days).  The manager
+///     groups sections by distributing shuffled slots round-robin across agents.
+/// </summary>
 public class ScheduleManager : MonoBehaviour
 {
-    // ?? Inspector ??????????????????????????????????????????????????????????????
+    // ── Inspector ─────────────────────────────────────────────────────────────
 
     [Header("References")]
     public GameObject agentPrefab;
     public CourseData courseData;
-    public Transform  spawnRoot;
-    public float      spawnRadius = 3f;
+    public Transform spawnRoot;
+    public float spawnRadius = 3f;
+
+    [Header("Exits / Entrances")]
+    [Tooltip("Assign every door / exit node in the scene here. Agents heading " +
+             "to Leaving will pick one at random.")]
+    public List<GameObject> exitNodes = new();
 
     [Header("Cap (0 = unlimited)")]
-    [Tooltip("Hard cap on total agents spawned. Set to 0 to spawn every enrolled student.")]
+    [Tooltip("Hard cap on total unique agents spawned. 0 = no cap.")]
     public int maxTotalAgents = 0;
 
-    // ?? Internal ???????????????????????????????????????????????????????????????
+    // ── Internal ──────────────────────────────────────────────────────────────
 
     private TimeManager _time;
     private readonly Dictionary<string, GameObject> _roomByNumber = new();
-    private readonly List<NavigationAgent>           _allAgents   = new();
+    private readonly List<NavigationAgent> _allAgents = new();
 
-    // ?? Unity ??????????????????????????????????????????????????????????????????
+    // ── Unity ─────────────────────────────────────────────────────────────────
 
     private void Awake()
     {
@@ -31,8 +45,7 @@ public class ScheduleManager : MonoBehaviour
 
         if (courseData == null)
         {
-            Debug.LogError("[ScheduleManager] CourseData asset not found! " +
-                           "Run Assets ? Simulation ? Import Course CSV first.");
+            Debug.LogError("[ScheduleManager] CourseData not found.");
             enabled = false;
         }
     }
@@ -41,93 +54,121 @@ public class ScheduleManager : MonoBehaviour
     {
         _time = FindObjectOfType<TimeManager>();
         IndexSceneRooms();
-
-        // ?? Fix: use a coroutine so agents are spawned one per frame instead of
-        // all in a single Update() call.  This prevents the instantiation burst
-        // that hit NavMesh baking and ABMU stepper registration simultaneously.
         StartCoroutine(SpawnAllAgentsCoroutine());
     }
 
-    // ?? Room indexing ??????????????????????????????????????????????????????????
+    // ── Room indexing ─────────────────────────────────────────────────────────
 
     private void IndexSceneRooms()
     {
         foreach (var go in FindObjectsOfType<GameObject>())
         {
             string n = go.name.Trim();
-            if (System.Text.RegularExpressions.Regex.IsMatch(n, @"^\d+$"))
-            {
-                if (!_roomByNumber.ContainsKey(n))
-                    _roomByNumber[n] = go;
-            }
+            if (System.Text.RegularExpressions.Regex.IsMatch(n, @"^\d+$") &&
+                !_roomByNumber.ContainsKey(n))
+                _roomByNumber[n] = go;
         }
         Debug.Log($"[ScheduleManager] Indexed {_roomByNumber.Count} room nodes.");
     }
 
-    // ?? Spawning ???????????????????????????????????????????????????????????????
+    // ── Spawning ──────────────────────────────────────────────────────────────
 
-    // ?? Fix: yield return null after each agent so Unity gets a frame to
-    // process the new NavMeshAgent and ABMU stepper before the next one arrives.
-    // On a 200-agent scene this costs ~200 frames (< 0.5 s at 60 fps) but
-    // completely eliminates the spawn-time freeze.
     private IEnumerator SpawnAllAgentsCoroutine()
     {
-        // Wait one frame for ABMU's AbstractController.Init() to finish.
-        yield return null;
+        yield return null; // Let ABMU finish its first Init pass.
 
-        if (agentPrefab == null) { Debug.LogError("[ScheduleManager] agentPrefab is null!");  yield break; }
-        if (spawnRoot   == null) { Debug.LogError("[ScheduleManager] spawnRoot is null!");    yield break; }
+        if (agentPrefab == null) { Debug.LogError("[ScheduleManager] agentPrefab is null!"); yield break; }
+        if (spawnRoot == null) { Debug.LogError("[ScheduleManager] spawnRoot is null!"); yield break; }
 
-        Debug.Log($"[ScheduleManager] CourseData has {courseData.sections.Count} sections.");
-        foreach (var kvp in _roomByNumber)
-            Debug.Log($"[ScheduleManager] Indexed room: '{kvp.Key}' -> {kvp.Value.name}");
+        // ── Step 1: build a flat list of (section, classroomNode) slots ──────
+        // Each slot represents one "student seat". We'll shuffle this list so
+        // no two runs assign the same agents to the same sections.
+        var slots = new List<(CourseSection section, GameObject classroomNode)>();
 
-        int total = 0;
-
-        foreach (CourseSection section in courseData.sections)
+        foreach (var section in courseData.sections)
         {
-            if (!_roomByNumber.TryGetValue(section.roomNumber, out GameObject classroomNode))
+            if (!_roomByNumber.TryGetValue(section.roomNumber, out GameObject node))
             {
-                Debug.LogWarning($"[ScheduleManager] No node found for room '{section.roomNumber}' � skipping.");
+                Debug.LogWarning($"[ScheduleManager] No room node for '{section.roomNumber}' — skipping.");
+                continue;
+            }
+            for (int i = 0; i < section.totalEnrolled; i++)
+                slots.Add((section, node));
+        }
+
+        // ── Step 2: Fisher-Yates shuffle ─────────────────────────────────────
+        // This is the core fix for "same agents every run". By shuffling before
+        // assignment, every run produces a different agent-to-section mapping.
+        for (int i = slots.Count - 1; i > 0; i--)
+        {
+            int j = Random.Range(0, i + 1);
+            (slots[i], slots[j]) = (slots[j], slots[i]);
+        }
+
+        // ── Step 3: determine how many unique agents to spawn ─────────────────
+        int totalSlots = slots.Count;
+        int agentCount = maxTotalAgents > 0
+                         ? Mathf.Min(maxTotalAgents, totalSlots)
+                         : totalSlots;
+
+        // ── Step 4: distribute slots round-robin across agents ────────────────
+        // Agent 0 gets slot 0, slot agentCount, slot 2*agentCount, etc.
+        // Because the slot list is shuffled, each agent's classes come from
+        // random positions in the original course list — different every run.
+        // This naturally gives agents with lower indices more classes when
+        // totalSlots > agentCount (realistic: some students have more classes).
+        var agentSections = new List<List<(CourseSection, GameObject)>>(agentCount);
+        for (int i = 0; i < agentCount; i++)
+            agentSections.Add(new List<(CourseSection, GameObject)>());
+
+        for (int slotIdx = 0; slotIdx < totalSlots; slotIdx++)
+        {
+            int agentIdx = slotIdx % agentCount;
+            agentSections[agentIdx].Add(slots[slotIdx]);
+        }
+
+        // ── Step 5: spawn one agent per schedule ──────────────────────────────
+        int total = 0;
+        for (int i = 0; i < agentCount; i++)
+        {
+            var sections = agentSections[i];
+            if (sections.Count == 0) continue;
+
+            // Pick a random exit node as the spawn origin so agents enter from
+            // different doors. Falls back to spawnRoot if no exits are assigned.
+            Transform spawnOrigin = (exitNodes != null && exitNodes.Count > 0)
+                ? exitNodes[Random.Range(0, exitNodes.Count)].transform
+                : spawnRoot;
+
+            Vector3 pos = spawnOrigin.position + Random.insideUnitSphere * spawnRadius;
+            pos.y = spawnOrigin.position.y;
+
+            GameObject go = Instantiate(agentPrefab, pos, Quaternion.identity);
+            go.name = $"Agent_{total:0000}";
+
+            var agent = go.GetComponent<NavigationAgent>();
+            if (agent == null)
+            {
+                Debug.LogError("[ScheduleManager] agentPrefab missing NavigationAgent!");
+                Destroy(go);
                 continue;
             }
 
-            for (int i = 0; i < section.totalEnrolled; i++)
-            {
-                if (maxTotalAgents > 0 && total >= maxTotalAgents)
-                {
-                    Debug.Log($"[ScheduleManager] Hit maxTotalAgents cap of {maxTotalAgents}.");
-                    yield break;
-                }
+            // Sort sections by start time before handing to the schedule.
+            sections.Sort((a, b) => a.Item1.startMinute.CompareTo(b.Item1.startMinute));
 
-                Vector3 pos  = spawnRoot.position + Random.insideUnitSphere * spawnRadius;
-                pos.y        = spawnRoot.position.y;
+            var schedule = new AgentSchedule(sections);
+            agent.SetSchedule(schedule);
+            // Pass the first classroom as the initial targetRoom, plus the exit list.
+            agent.Init(sections[0].Item2, exitNodes);
 
-                GameObject go = Instantiate(agentPrefab, pos, Quaternion.identity);
-                go.name       = $"Agent_{total:0000}";
+            _allAgents.Add(agent);
+            total++;
 
-                var agent = go.GetComponent<NavigationAgent>();
-                if (agent == null)
-                {
-                    Debug.LogError("[ScheduleManager] agentPrefab has no NavigationAgent component!");
-                    Destroy(go);
-                    continue;
-                }
-
-                var schedule = new AgentSchedule(section, classroomNode);
-                agent.SetSchedule(schedule);
-                agent.Init(classroomNode);
-
-                _allAgents.Add(agent);
-                total++;
-
-                // ?? Fix: yield after every agent so NavMesh and ABMU can
-                // process the registration before the next one is created.
-                yield return null;
-            }
+            yield return null; // One agent per frame — avoids NavMesh/ABMU burst.
         }
 
-        Debug.Log($"[ScheduleManager] Spawned {total} agents across {courseData.sections.Count} sections.");
+        Debug.Log($"[ScheduleManager] Spawned {total} agents.");
     }
 
     public IReadOnlyList<NavigationAgent> AllAgents => _allAgents;
