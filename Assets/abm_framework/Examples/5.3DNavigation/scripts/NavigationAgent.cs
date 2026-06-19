@@ -468,6 +468,8 @@ public class NavigationAgent : AbstractAgent
     {
         transform.position = slotPosition;
         nmAgent.nextPosition = slotPosition;
+        Debug.Log("Teleported with elevator");
+        Debug.Log("Stopping agent program");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

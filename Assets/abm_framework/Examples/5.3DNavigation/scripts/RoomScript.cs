@@ -24,17 +24,9 @@ public class RoomScript : MonoBehaviour
         bounds = this.GetComponent<Renderer>().bounds;
     }
 
-    private void LateUpdate() {
-        DetectAgentsInRoom();
-        SetColor(); 
-    }
 
-    void SetColor(){
-        float val = (float)numAgents/nCont.agents.Count;
-        val = Utilities.Map(val, 0f, nCont.heatmapUpperBound, 0f, 1f);
-        c = nCont.heatmapGradient.Evaluate(val);
-        floorRenderer.material.color = c;  
-    }
+
+
 
     void DetectAgentsInRoom(){
         Collider[] cols = Physics.OverlapBox(bounds.center, bounds.extents*0.9f, this.transform.rotation, nCont.agentLm);

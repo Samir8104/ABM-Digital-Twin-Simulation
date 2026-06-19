@@ -99,6 +99,7 @@ public class ElevatorController : MonoBehaviour
     {
         _riders.Add(agent);
         agent.TeleportWithElevator(GetRiderSlot(_riders.Count - 1));
+        Debug.Log("Boarding Agent");
     }
 
     public void ExitAgent(NavigationAgent agent) => _riders.Remove(agent);
@@ -195,6 +196,7 @@ public class ElevatorController : MonoBehaviour
 
             for (int i = 0; i < _riders.Count; i++)
                 _riders[i].TeleportWithElevator(GetRiderSlot(i));
+            Debug.Log("Teleporting!!");
 
             yield return null;
         }
