@@ -14,18 +14,86 @@ public class NavigationController : AbstractController
     [Header("Agent Parameters")]
     public float distToTargetThreshold = 2f;
     public LayerMask agentLm;
-    public GameObject agentPrefab; // Still needed for GetRandomPointInRoom's baseOffset lookup
+    public GameObject agentPrefab;
 
     [Header("Room Selection Weights")]
     public float lowWeight = 0.1f;
     public float midWeight = 0.35f;
     public float highWeight = 0.55f;
 
+    [Header("Elevator Parameters")]
+    [Tooltip("If the best available elevator at a floor already has this many people waiting/riding, agents treat it as busy and take the stairs instead of queuing.")]
+    public int maxElevatorLoadBeforeStairs = 4;
+
+    [Header("Named Nodes")]
+    public string bathroomNodeName = "Bathroom";
+    public string studyingNodeName = "Studying";
+
+    // ── Exit nodes ────────────────────────────────────────────────────────────
+    [Header("Exit Nodes")]
+    [Tooltip("Tag all exit GameObjects with this tag. Agents heading to Done will pick one at random.")]
+    public string exitNodeTag = "ExitNode";
+
+    // Resolved once at Init.
+    private GameObject _bathroomNode;
+    private GameObject _studyingNode;
+    private GameObject[] _exitNodes;
+    private GameObject[] _officeHoursNodes;
+
+
+
+
     public override void Init()
     {
         base.Init();
         rooms = GetAllRooms();
-        // No agent spawning here anymore — ScheduleManager.Start() handles it.
+        _bathroomNode = GameObject.Find(bathroomNodeName);
+        _studyingNode = GameObject.Find(studyingNodeName);
+        _exitNodes = GameObject.FindGameObjectsWithTag(exitNodeTag);
+        _officeHoursNodes = GameObject.FindGameObjectsWithTag("OfficeHours");
+
+
+        if (_exitNodes == null || _exitNodes.Length == 0)
+            Debug.LogWarning("[NavigationController] No exit nodes found. " +
+                             $"Make sure exit GameObjects are tagged '{exitNodeTag}'.");
+    }
+
+    public GameObject GetClosestBathroomNode(Vector3 fromPosition)
+    {
+        return GetClosestNodeWithTag("Bathroom", fromPosition);
+    }
+
+
+    public GameObject GetRandomStudyingNode()
+    {
+        GameObject[] nodes = GameObject.FindGameObjectsWithTag("Studying");
+        if (nodes == null || nodes.Length == 0) return null;
+        return nodes[Random.Range(0, nodes.Length)];
+    }
+
+    public GameObject GetRandomOfficeHoursNode()
+    {
+        if (_officeHoursNodes == null || _officeHoursNodes.Length == 0) return null;
+        return _officeHoursNodes[Random.Range(0, _officeHoursNodes.Length)];
+    }
+
+
+
+    private GameObject GetClosestNodeWithTag(string tag, Vector3 fromPosition)
+    {
+        GameObject[] nodes = GameObject.FindGameObjectsWithTag(tag);
+        if (nodes == null || nodes.Length == 0) return null;
+
+        GameObject closest = null;
+        float bestDist = float.MaxValue;
+
+        foreach (var node in nodes)
+        {
+            float dist = Vector3.Distance(fromPosition, node.transform.position);
+            if (dist < bestDist) { bestDist = dist; closest = node; }
+        }
+
+        return closest;
     }
 
     public override void Step()
@@ -34,9 +102,20 @@ public class NavigationController : AbstractController
         base.Step();
     }
 
+    // ── Exit node access ──────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Returns a random exit node. Agents that need to leave spread across all
+    /// available exits, reducing NavMesh congestion at a single point.
+    /// Returns null if no exit nodes were found at Init (logs a warning once above).
+    /// </summary>
+    public GameObject GetRandomExitNode()
+    {
+        if (_exitNodes == null || _exitNodes.Length == 0) return null;
+        return _exitNodes[Random.Range(0, _exitNodes.Length)];
+    }
 
-    // ── Room selection (unchanged) ────────────────────────────────────────────
+    // ── Room selection ────────────────────────────────────────────────────────
 
     public GameObject GetRandomRoom()
     {
@@ -46,7 +125,6 @@ public class NavigationController : AbstractController
 
         float roll = Random.Range(0f, totalWeight);
         float cumulative = 0f;
-
         foreach (var room in rooms)
         {
             cumulative += GetWeightForRoom(room);
@@ -67,7 +145,6 @@ public class NavigationController : AbstractController
             _ => midWeight
         };
     }
-
 
     public GameObject GetRoomByNumber(string roomNumber)
     {

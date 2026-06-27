@@ -217,7 +217,9 @@ namespace ABMU
             /// </summary>
             /// <param name="stepperName">The name of the stepper (usually the method name) to be removed</param>
             public void DestroyStepper(string stepperName){
-                DeregisterStepper(steppers.Find(s => s.name == stepperName));
+                    Stepper found = steppers.Find(s => s != null && s.name == stepperName);
+                    if (found != null)
+                    DeregisterStepper(found);
             }
 
             /// <summary>

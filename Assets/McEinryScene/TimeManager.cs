@@ -13,10 +13,12 @@ public class TimeManager : MonoBehaviour
     private float _currentTime;
     public int startHour;
     public int endHour;
+    public int simMinute;
 
     public int CurrentDay { get; private set; } = 1;
     public int CurrentHour { get; private set; } = 8; // What time does it start at? For the best results, I'm gonna start it at 8am
     public int CurrentMinute { get; private set; }
+
 
     public enum DayOfWeek { Monday, Tuesday, Wednesday, Thursday, Friday}
     private bool isAm = true;
@@ -36,7 +38,8 @@ public class TimeManager : MonoBehaviour
 
         CurrentHour = (Mathf.FloorToInt(_currentTime / 3600f) % 24) + startHour;
         CurrentMinute = Mathf.FloorToInt((_currentTime % 3600f) / 60f);
-        if(CurrentHour >= 12 )
+        simMinute = CurrentHour * 60 + CurrentMinute;
+        if (CurrentHour >= 12 )
         {
             isAm = false;
         }

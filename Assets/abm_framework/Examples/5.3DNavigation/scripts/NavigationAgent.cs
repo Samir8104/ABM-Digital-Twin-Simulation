@@ -13,7 +13,6 @@ public class NavigationAgent : AbstractAgent
     Vector3 target;
     public GameObject targetRoom;
     public bool isNearTarget = false;
-    private GameObject _classroomNode;
 
     // ── Elevator state ────────────────────────────────────────────────────────
     public int TargetFloor { get; private set; } = 0;
@@ -27,27 +26,40 @@ public class NavigationAgent : AbstractAgent
     private AgentSchedule _schedule;
     private bool _scheduleInitialized = false;
 
-    private const string BathroomNodeName = "Bathroom";
-    private const string OfficeHoursNodeName = "OfficeHours";
+    public int DepartureWindowMinutes { get; private set; }
+    public AgentSchedule Schedule => _schedule;
+
+    // ── Class-end guard ───────────────────────────────────────────────────────
+    private bool _classEndHandled = false;
+
+    // ── Bathroom urge ─────────────────────────────────────────────────────────
+    private int _bathroomUrgeSteps = 0;
+    private bool _bathroomUrgeActive = false;
+    private bool _bathroomNeedPending = false;
 
     // ── Stepper liveness tracking ─────────────────────────────────────────────
-    // Rule: NEVER call DestroyStepper(name) unless the matching flag is true.
-    // Always set the flag to false immediately after destroying.
     private bool _stepperAlive_DeferredInit = false;
     private bool _stepperAlive_ScheduleTick = false;
     private bool _stepperAlive_CheckDist = false;
     private bool _stepperAlive_Move = false;
     private bool _stepperAlive_StayInPlace = false;
+    private bool _stepperAlive_BathroomUrge = false;
+
+    // Tracks steppers created this ABMU tick that haven't been flushed into the
+    // scheduler dictionary yet. SafeDestroyStepper checks this before calling
+    // DestroyStepper — destroying a stepper before RegisterSteppersCreated runs
+    // causes the NullReferenceException in Scheduler.DeregisterDestroyedStepper.
+    private readonly System.Collections.Generic.HashSet<string> _pendingRegistration = new();
 
     // ── Setup ─────────────────────────────────────────────────────────────────
 
     public void SetSchedule(AgentSchedule schedule)
     {
         _schedule = schedule;
-        _classroomNode = schedule.ClassroomNode;
+        DepartureWindowMinutes = Random.Range(10, 21);
     }
 
-    public void Init(GameObject _targetRoom)
+    public void Init(GameObject startRoom)
     {
         base.Init();
         nCont = FindObjectOfType<NavigationController>();
@@ -56,69 +68,101 @@ public class NavigationAgent : AbstractAgent
         _callStations = FindObjectsOfType<ElevatorCallStation>();
 
         SetNMAgentProperties();
-        targetRoom = _targetRoom;
-
+        targetRoom = startRoom;
+        Debug.Log(name + " just used it's init function.");
         SafeCreateStepper("DeferredInit", DeferredInit, 1, 1);
+    }
+
+
+
+
+    public void WakeUpForClass(AgentSchedule.ClassEntry classEntry, Vector3 spawnPosition)
+    {
+        transform.position = spawnPosition;
+        nmAgent.nextPosition = spawnPosition;
+
+        _schedule.SetActiveClass(classEntry);
+        _schedule.SetActivity(AgentActivity.GoingToClass);
+        _classEndHandled = false;
+        _bathroomNeedPending = false;
+
+        NavigateTo(classEntry.ClassroomNode);
+        ResetBathroomUrge();
     }
 
     // ── Stepper lifecycle helpers ─────────────────────────────────────────────
 
-    /// <summary>Creates a named stepper only if it isn't already alive.</summary>
     void SafeCreateStepper(string stepperName, ABMU.Utilities.Del method, int step, int priority)
     {
         switch (stepperName)
         {
             case "DeferredInit":
                 if (_stepperAlive_DeferredInit) return;
-                _stepperAlive_DeferredInit = true;
-                break;
+                _stepperAlive_DeferredInit = true; break;
             case "ScheduleTick":
                 if (_stepperAlive_ScheduleTick) return;
-                _stepperAlive_ScheduleTick = true;
-                break;
+                _stepperAlive_ScheduleTick = true; break;
             case "CheckDistToTarget":
                 if (_stepperAlive_CheckDist) return;
-                _stepperAlive_CheckDist = true;
-                break;
+                _stepperAlive_CheckDist = true; break;
             case "Move":
                 if (_stepperAlive_Move) return;
-                _stepperAlive_Move = true;
-                break;
+                _stepperAlive_Move = true; break;
             case "StayInPlace":
                 if (_stepperAlive_StayInPlace) return;
-                _stepperAlive_StayInPlace = true;
-                break;
+                _stepperAlive_StayInPlace = true; break;
+            case "BathroomUrge":
+                if (_stepperAlive_BathroomUrge) return;
+                _stepperAlive_BathroomUrge = true; break;
         }
+        _pendingRegistration.Add(stepperName);
         CreateStepper(method, step, priority);
     }
 
-    /// <summary>Destroys a named stepper only if it is currently alive.</summary>
     void SafeDestroyStepper(string stepperName)
     {
+        // If this stepper was created this tick but ABMU hasn't run
+        // RegisterSteppersCreated yet, it isn't in the scheduler dict.
+        // Calling DestroyStepper now causes NullReferenceException in
+        // DeregisterDestroyedStepper. Just clear the flags instead —
+        // the stepper will be registered next tick but the liveness flag
+        // being false means it will do nothing and never be re-destroyed.
+        if (_pendingRegistration.Contains(stepperName))
+        {
+            _pendingRegistration.Remove(stepperName);
+            switch (stepperName)
+            {
+                case "DeferredInit": _stepperAlive_DeferredInit = false; break;
+                case "ScheduleTick": _stepperAlive_ScheduleTick = false; break;
+                case "CheckDistToTarget": _stepperAlive_CheckDist = false; break;
+                case "Move": _stepperAlive_Move = false; break;
+                case "StayInPlace": _stepperAlive_StayInPlace = false; break;
+                case "BathroomUrge": _stepperAlive_BathroomUrge = false; break;
+            }
+            return;
+        }
+
         switch (stepperName)
         {
             case "DeferredInit":
                 if (!_stepperAlive_DeferredInit) return;
-                _stepperAlive_DeferredInit = false;
-                break;
+                _stepperAlive_DeferredInit = false; break;
             case "ScheduleTick":
                 if (!_stepperAlive_ScheduleTick) return;
-                _stepperAlive_ScheduleTick = false;
-                break;
+                _stepperAlive_ScheduleTick = false; break;
             case "CheckDistToTarget":
                 if (!_stepperAlive_CheckDist) return;
-                _stepperAlive_CheckDist = false;
-                break;
+                _stepperAlive_CheckDist = false; break;
             case "Move":
                 if (!_stepperAlive_Move) return;
-                _stepperAlive_Move = false;
-                break;
+                _stepperAlive_Move = false; break;
             case "StayInPlace":
                 if (!_stepperAlive_StayInPlace) return;
-                _stepperAlive_StayInPlace = false;
-                break;
-            default:
-                return;
+                _stepperAlive_StayInPlace = false; break;
+            case "BathroomUrge":
+                if (!_stepperAlive_BathroomUrge) return;
+                _stepperAlive_BathroomUrge = false; break;
+            default: return;
         }
         DestroyStepper(stepperName);
     }
@@ -127,17 +171,12 @@ public class NavigationAgent : AbstractAgent
 
     void DeferredInit()
     {
-
+        _pendingRegistration.Remove("DeferredInit");
         if (nCont == null || _time == null || _schedule == null) return;
-        if (_scheduleInitialized)
-        {
-            SafeDestroyStepper("DeferredInit");
-            return;
-        }
+        if (_scheduleInitialized) { SafeDestroyStepper("DeferredInit"); return; }
 
         _scheduleInitialized = true;
         SafeDestroyStepper("DeferredInit");
-
         SafeCreateStepper("ScheduleTick", ScheduleTick, 30, 1);
     }
 
@@ -145,158 +184,227 @@ public class NavigationAgent : AbstractAgent
 
     void ScheduleTick()
     {
-        if (_schedule == null || _time == null || nCont == null)
-        {
-            return;
-        }
+        Debug.Log($"[{name}] total steppers on controller: {controller.scheduler.steppersEveryTick.Count}");
+        _pendingRegistration.Remove("ScheduleTick");
+        if (_schedule == null || _time == null || nCont == null) return;
+        if (_isRiding) return;
 
         int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
-        bool classToday = _schedule.SectionMeetsToday(_time);
-
-       
-        // if the silly agent is on an elevator
-        if (_isRiding) return;
 
         switch (_schedule.CurrentActivity)
         {
+            case AgentActivity.OffCampus:
+                break;
+
             case AgentActivity.Idle:
-                if (classToday && simMinute >= _schedule.StartMinute - 10)
+                var toHead = _schedule.FindClassToHeadTo(simMinute, DepartureWindowMinutes);
+                if (toHead.HasValue)
                 {
+                    _schedule.SetActiveClass(toHead.Value);
                     _schedule.SetActivity(AgentActivity.GoingToClass);
-                    NavigateTo(_classroomNode);
-                }
-                else if (!classToday)
-                {
-                    _schedule.SetActivity(AgentActivity.Wandering);
-                    NavigateTo(nCont.GetRandomRoom());
-                }
-                else
-                {
+                    _classEndHandled = false;
+                    NavigateTo(toHead.Value.ClassroomNode);
+                    ResetBathroomUrge();
                 }
                 break;
 
             case AgentActivity.InClass:
-                if (simMinute >= _schedule.EndMinute)
+                if (simMinute >= _schedule.EndMinute && !_classEndHandled)
                 {
-                    Debug.Log($"[{name}] → Class over at {simMinute}, leaving");
-
+                    _classEndHandled = true;
                     _schedule.SetActivity(AgentActivity.Wandering);
-                    PickAndDoRandomActivity(simMinute);
+                    StartTimedStay(Random.Range(1, 30));
                 }
                 break;
 
             case AgentActivity.Done:
                 SafeDestroyStepper("ScheduleTick");
-                gameObject.SetActive(false);
                 break;
         }
     }
 
-    // ── Random activity picker ────────────────────────────────────────────────
+    // ── Post-class decision ───────────────────────────────────────────────────
 
-    void PickAndDoRandomActivity(int simMinute)
+    void PostClassDecision()
     {
-        if (_schedule.AttendedToday && simMinute > _schedule.EndMinute + 60)
+        int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
+        int gapMinutes = _schedule.MinutesUntilNextClass(simMinute);
+
+        float stayChance;
+        if (gapMinutes <= 60) stayChance = 0.65f;
+        else if (gapMinutes <= 120) stayChance = 0.25f;
+        else stayChance = 0.10f;
+
+        if (Random.value < stayChance)
         {
-            if (Random.value < 0.30f)
+            float roll = Random.value;
+
+            if (_bathroomNeedPending || roll < 0.30f)
             {
-                _schedule.SetActivity(AgentActivity.Done);
+                _bathroomNeedPending = false;
+                GoToBathroom();
+            }
+            else if (roll < 0.40f) 
+            {
+                Debug.Log("Going to office hours");
+                GoToOfficeHours();
+            }
+            else
+            {
+                GoStudy();
+            }
+        }
+        else
+        {
+            LeaveBuilding();
+        }
+    }
+
+    // ── After bathroom / study finishes ──────────────────────────────────────
+
+    void AfterActivityDecision()
+    {
+        int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
+
+        // Check if next class is approaching
+        var nextClass = _schedule.NextClass;
+        if (nextClass.HasValue && nextClass.Value.Section.MeetsOnDay(_time.GetCurrentDayOfWeek()))
+        {
+            int headOutAt = nextClass.Value.Section.startMinute - DepartureWindowMinutes;
+            if (simMinute >= headOutAt)
+            {
+                _schedule.SetActiveClass(nextClass.Value);
+                _schedule.SetActivity(AgentActivity.GoingToClass);
+                _classEndHandled = false;
+                NavigateTo(nextClass.Value.ClassroomNode);
                 return;
             }
         }
 
-        float roll = Random.value;
+        int gapMinutes = _schedule.MinutesUntilNextClass(simMinute);
 
-        if (roll < 0.35f)
+        if (gapMinutes > 90)
         {
-            _schedule.SetActivity(AgentActivity.GoingToBathroom);
-            NavigateToNamedNode(BathroomNodeName);
+            // Too long until next class — leave the building
+            LeaveBuilding();
         }
-        else if (roll < 0.55f)
+        else if (_bathroomNeedPending)
         {
-            _schedule.SetActivity(AgentActivity.GoingToOfficeHours);
-            NavigateToNamedNode(OfficeHoursNodeName);
-        }
-        else if (roll < 0.85f)
-        {
-            _schedule.SetActivity(AgentActivity.Chatting); // TODO: Make it so the agent heads to a node called 'chattingarea' instead of a random classroom
-            NavigateTo(nCont.GetRandomRoom());
+            _bathroomNeedPending = false;
+            GoToBathroom();
         }
         else
         {
-            _schedule.SetActivity(AgentActivity.Wandering); // Wandering and chatting are the same thing, I feel like it would be better if the agent just left the building atp. 
-            // TODO: Make the agent leave the building instead of wander.
-            NavigateTo(nCont.GetRandomRoom());
+            // Gap is short enough — stay put until class time
+            // Don't GoStudy() again — just wait in place
+            StartTimedStay(Mathf.Clamp(gapMinutes - DepartureWindowMinutes, 5, 60));
         }
+    }
+
+    // ── Activity helpers ──────────────────────────────────────────────────────
+
+    void GoToBathroom()
+    {
+        GameObject node = nCont.GetClosestBathroomNode(transform.position);
+        if (node == null) { AfterActivityDecision(); return; }
+        _schedule.SetActivity(AgentActivity.GoingToBathroom);
+        NavigateDirect(node);
+    }
+
+    void GoToOfficeHours()
+    {
+        GameObject node = nCont.GetRandomOfficeHoursNode();
+        if (node == null) { AfterActivityDecision(); return; }
+        _schedule.SetActivity(AgentActivity.GoingToOfficeHours);
+        NavigateDirect(node);
+    }
+
+
+    void GoStudy()
+    {
+        GameObject node = nCont.GetRandomStudyingNode();
+        if (node == null) { LeaveBuilding(); return; }
+        _schedule.SetActivity(AgentActivity.GoingToStudying);
+        NavigateDirect(node);
+    }
+
+    void LeaveBuilding()
+    {
+        GameObject exitNode = nCont.GetRandomExitNode();
+        if (exitNode == null) { DeactivateAgent(); return; }
+        _schedule.SetActivity(AgentActivity.GoingToExit);
+        NavigateDirect(exitNode);
+    }
+
+    // ── Agent deactivation ────────────────────────────────────────────────────
+
+    void DeactivateAgent()
+    {
+        SafeDestroyStepper("CheckDistToTarget");
+        SafeDestroyStepper("Move");
+        SafeDestroyStepper("StayInPlace");
+        SafeDestroyStepper("BathroomUrge");
+        _schedule.SetActivity(AgentActivity.OffCampus);
+        gameObject.SetActive(false);
     }
 
     // ── Arrival handling ──────────────────────────────────────────────────────
 
     void CheckDistToTarget()
     {
+        _pendingRegistration.Remove("CheckDistToTarget");
         float d = Vector3.Distance(transform.position, target);
+        if (d >= nCont.distToTargetThreshold) { isNearTarget = false; return; }
 
-        if (d < nCont.distToTargetThreshold) // if the agent is next to the target
+        isNearTarget = true;
+        nmAgent.isStopped = true;
+        SafeDestroyStepper("CheckDistToTarget");
+        SafeDestroyStepper("Move");
+
+        if (_pendingCallStation != null)
         {
-
-            isNearTarget = true;
-            nmAgent.isStopped = true;
-
-            // Always kill movement steppers first — safe because we track liveness
-            SafeDestroyStepper("CheckDistToTarget");
-            SafeDestroyStepper("Move");
-
-            if (_pendingCallStation != null)
-            {
-                ElevatorCallStation station = _pendingCallStation;
-                int destFloor = _pendingDestFloor;
-                _pendingCallStation = null;
-
-                bool accepted = station.TryRegisterWaitingAgent(this, destFloor);
-                if (!accepted) TakeStairs(targetRoom);
-                return;
-            }
-
-            int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
-
-            switch (_schedule.CurrentActivity)
-                //Once the agent has arrived at its location, it waits a certain amount of time depending on the state of the agent
-                // The performance hit has to happen somewhere here, just dont know why yet. 
-            {
-                case AgentActivity.GoingToClass:
-                    _schedule.SetActivity(AgentActivity.InClass);
-                    // ScheduleTick will detect InClass → past EndMinute and call PickAndDoRandomActivity
-                    break;
-
-                case AgentActivity.GoingToBathroom:
-                    int bathroomTime = Random.Range(2, 6);
-                    _schedule.SetActivity(AgentActivity.InBathroom);
-                    StartTimedStay(bathroomTime);
-                    break;
-
-                case AgentActivity.GoingToOfficeHours:
-                    int ohTime = Random.Range(10, 30);
-                    _schedule.SetActivity(AgentActivity.InOfficeHours);
-                    StartTimedStay(ohTime);
-                    break;
-
-                case AgentActivity.Chatting:
-                    int chatTime = Random.Range(2, 8);
-                    StartTimedStay(chatTime);
-                    break;
-
-                case AgentActivity.Wandering:
-                    int wanderTime = Random.Range(3, 12);
-                    StartTimedStay(wanderTime);
-                    break;
-
-                default:
-                    break;
-            }
+            ElevatorCallStation station = _pendingCallStation;
+            int destFloor = _pendingDestFloor;
+            _pendingCallStation = null;
+            if (!station.TryRegisterWaitingAgent(this, destFloor))
+                TakeStairs(targetRoom);
+            return;
         }
-        else
+
+        switch (_schedule.CurrentActivity)
         {
-            isNearTarget = false;
+            case AgentActivity.GoingToClass:
+                _schedule.SetActivity(AgentActivity.InClass);
+                break;
+
+            case AgentActivity.GoingToBathroom:
+                _schedule.SetActivity(AgentActivity.InBathroom);
+                StartTimedStay(Random.Range(2, 6));
+                break;
+
+            case AgentActivity.GoingToStudying:
+                _schedule.SetActivity(AgentActivity.InStudying);
+                // Study until close to next class, or for a long time if done for the day
+                int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
+                int gap = _schedule.MinutesUntilNextClass(simMinute);
+                int studyDuration;
+                if (gap <= 0 || gap > 200)
+                    studyDuration = Random.Range(60, 120); 
+                else
+                    studyDuration = Mathf.Clamp(gap - 15, 10, 90); // Study until ~15 min before next class
+                StartTimedStay(studyDuration);
+                break;
+
+            case AgentActivity.GoingToExit:
+                DeactivateAgent();
+                break;
+            case AgentActivity.GoingToOfficeHours:
+                _schedule.SetActivity(AgentActivity.InOfficeHours);
+                StartTimedStay(Random.Range(20, 60));
+                break;
+
+            default:
+                break;
         }
     }
 
@@ -306,65 +414,120 @@ public class NavigationAgent : AbstractAgent
 
     void StartTimedStay(int simMinutes)
     {
+        SafeDestroyStepper("StayInPlace");
         _stayMinutesRemaining = simMinutes;
-        SafeCreateStepper("StayInPlace", StayInPlace, 60, 2);
+        SafeCreateStepper("StayInPlace", StayInPlace, 2, 1);
     }
 
     void StayInPlace()
     {
+        _pendingRegistration.Remove("StayInPlace");
         _stayMinutesRemaining--;
+        if (_stayMinutesRemaining > 0) return;
 
-        if (_stayMinutesRemaining <= 0)
+        SafeDestroyStepper("StayInPlace");
+
+        switch (_schedule.CurrentActivity)
+        {
+            case AgentActivity.Wandering:
+                PostClassDecision();
+                break;
+            case AgentActivity.InBathroom:
+            case AgentActivity.InStudying:
+                AfterActivityDecision();
+                break;
+            case AgentActivity.InOfficeHours:
+                AfterActivityDecision();
+                break;
+            default:
+                AfterActivityDecision();
+                break;
+        }
+    }
+
+    // ── Bathroom urge system ──────────────────────────────────────────────────
+
+    private const int BATHROOM_URGE_MIN = 180;
+    private const int BATHROOM_URGE_MAX = 360;
+
+    void ResetBathroomUrge()
+    {
+        SafeDestroyStepper("BathroomUrge");
+        _bathroomUrgeSteps = Random.Range(BATHROOM_URGE_MIN, BATHROOM_URGE_MAX + 1);
+        _bathroomUrgeActive = true;
+        SafeCreateStepper("BathroomUrge", BathroomUrgeTick, 60, 50);
+    }
+
+    void BathroomUrgeTick()
+    {
+        _pendingRegistration.Remove("BathroomUrge");
+        if (!_bathroomUrgeActive) return;
+        _bathroomUrgeSteps--;
+        if (_bathroomUrgeSteps > 0) return;
+
+        _bathroomUrgeActive = false;
+        SafeDestroyStepper("BathroomUrge");
+
+        var act = _schedule.CurrentActivity;
+        bool canGoNow = act == AgentActivity.InStudying ||
+                        act == AgentActivity.Wandering ||
+                        act == AgentActivity.Idle;
+
+        if (canGoNow)
         {
             SafeDestroyStepper("StayInPlace");
-            int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
-            PickAndDoRandomActivity(simMinute);
+            GoToBathroom();
         }
+        else
+        {
+            _bathroomNeedPending = true;
+        }
+
+        ResetBathroomUrge();
     }
 
     // ── Navigation ────────────────────────────────────────────────────────────
 
     void NavigateTo(GameObject room)
     {
-        if (room == null)
-        {
-            return;
-        }
-
+        if (room == null) return;
 
         int newFloor = GetFloorOfRoom(room);
         int thisFloor = GetFloorOfRoom(targetRoom);
 
-
         if (newFloor != thisFloor && newFloor >= 0 && thisFloor >= 0)
         {
             ElevatorCallStation station = GetBestStationForFloor(thisFloor);
-            if (station != null) { StartElevatorJourney(room, newFloor, station); return; }
+            if (station != null && Random.value < 0.80f)
+            {
+                StartElevatorJourney(room, newFloor, station);
+                return;
+            }
         }
 
         SetTarget(room);
     }
 
-    void NavigateToNamedNode(string nodeName)
+    void NavigateDirect(GameObject room)
     {
-        GameObject node = GameObject.Find(nodeName);
-        NavigateTo(node != null ? node : nCont.GetRandomRoom());
+        if (room == null) return;
+        SetTarget(room);
     }
 
     public void SetTarget(GameObject room)
     {
+        SnapToNavMesh();
+
         targetRoom = room;
         target = nCont.GetRandomPointInRoom(room);
-        Debug.Log($"[{name}] SetTarget: {room.name} → position {target}");
 
-        // Kill any in-flight movement steppers before starting new ones
         SafeDestroyStepper("CheckDistToTarget");
         SafeDestroyStepper("Move");
 
-        nmAgent.SetDestination(target);
         nmAgent.isStopped = false;
+        nmAgent.SetDestination(target);
 
-        SafeCreateStepper("CheckDistToTarget", CheckDistToTarget, 1, 100);
+        SafeCreateStepper("CheckDistToTarget", CheckDistToTarget, 2, 100);
         SafeCreateStepper("Move", Move, 1, 105);
     }
 
@@ -372,6 +535,7 @@ public class NavigationAgent : AbstractAgent
 
     void Move()
     {
+        _pendingRegistration.Remove("Move");
         if (_isRiding) return;
         nmAgent.velocity = Vector3.zero;
         nmAgent.nextPosition = transform.position + nmAgent.desiredVelocity * 0.03f;
@@ -379,18 +543,36 @@ public class NavigationAgent : AbstractAgent
         transform.position = nmAgent.nextPosition;
     }
 
+    // ── NavMesh safety ────────────────────────────────────────────────────────
+
+    private void SnapToNavMesh()
+    {
+        if (nmAgent.isOnNavMesh) return;
+        foreach (float r in new float[] { 2f, 5f, 10f })
+        {
+            if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, r, NavMesh.AllAreas))
+            {
+                nmAgent.Warp(hit.position);
+                transform.position = hit.position;
+                return;
+            }
+        }
+        Debug.LogWarning($"[{name}] SnapToNavMesh: no surface within 10 units.");
+    }
+
     // ── Elevator ──────────────────────────────────────────────────────────────
 
     private void StartElevatorJourney(GameObject destinationRoom, int destFloor,
                                        ElevatorCallStation station)
     {
+        SnapToNavMesh();
         targetRoom = destinationRoom;
         TargetFloor = destFloor;
         _pendingCallStation = station;
         _pendingDestFloor = destFloor;
         target = station.transform.position;
-        nmAgent.SetDestination(target);
         nmAgent.isStopped = false;
+        nmAgent.SetDestination(target);
 
         SafeDestroyStepper("CheckDistToTarget");
         SafeDestroyStepper("Move");
@@ -410,12 +592,12 @@ public class NavigationAgent : AbstractAgent
 
     public void ExitElevator(int floorIndex)
     {
-        Vector3 exitPosition = _elevator.GetCallStationPosition(floorIndex);
+        Vector3 exitPos = _elevator.GetCallStationPosition(floorIndex);
         _elevator.ExitAgent(this);
         _elevator = null;
         _isRiding = false;
-        transform.position = exitPosition;
-        nmAgent.Warp(exitPosition);
+        transform.position = exitPos;
+        nmAgent.Warp(exitPos);
         nmAgent.isStopped = false;
         SetTarget(targetRoom);
     }
@@ -432,7 +614,7 @@ public class NavigationAgent : AbstractAgent
     {
         nmAgent.updatePosition = false;
         nmAgent.velocity = Vector3.zero;
-        nmAgent.acceleration = 0f;
+        nmAgent.acceleration = 999f;
     }
 
     private int GetFloorOfRoom(GameObject room)
@@ -460,6 +642,7 @@ public class NavigationAgent : AbstractAgent
             int load = s.WaitingCount + s.elevatorController.RiderCount;
             if (load < bestLoad) { bestLoad = load; best = s; }
         }
+        if (best != null && bestLoad >= nCont.maxElevatorLoadBeforeStairs) return null;
         return best;
     }
 }
