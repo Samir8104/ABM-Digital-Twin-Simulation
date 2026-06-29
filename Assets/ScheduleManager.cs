@@ -1,6 +1,8 @@
-﻿using System.Collections;
+﻿using ABMU.Core;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 
 /// <summary>
 /// Spawns agents, assigns their schedules, and wires up scene references.
@@ -35,6 +37,7 @@ public class ScheduleManager : MonoBehaviour
     private TimeManager _time;
     private readonly Dictionary<string, GameObject> _roomByNumber = new();
     private readonly List<NavigationAgent> _allAgents = new();
+
 
     // ── Unity ─────────────────────────────────────────────────────────────────
 
@@ -129,24 +132,26 @@ public class ScheduleManager : MonoBehaviour
 
         // ── Step 5: spawn one agent per schedule ──────────────────────────────
         int total = 0;
+
+
         for (int i = 0; i < agentCount; i++)
         {
             var sections = agentSections[i];
             if (sections.Count == 0) continue;
 
-            // Pick a random exit node as the spawn origin so agents enter from
-            // different doors. Falls back to spawnRoot if no exits are assigned.
+            // Pick a random exit node and sample the NavMesh near it so agents
+            // never spawn underground or off-mesh.
             Transform spawnOrigin = (exitNodes != null && exitNodes.Count > 0)
                 ? exitNodes[Random.Range(0, exitNodes.Count)].transform
                 : spawnRoot;
 
-            Vector3 pos = spawnOrigin.position + Random.insideUnitSphere * spawnRadius;
-            pos.y = spawnOrigin.position.y;
+            Vector3 pos = GetNavMeshSpawnPoint(spawnOrigin.position);
 
             GameObject go = Instantiate(agentPrefab, pos, Quaternion.identity);
             go.name = $"Agent_{total:0000}";
 
             var agent = go.GetComponent<NavigationAgent>();
+
             if (agent == null)
             {
                 Debug.LogError("[ScheduleManager] agentPrefab missing NavigationAgent!");
@@ -154,13 +159,20 @@ public class ScheduleManager : MonoBehaviour
                 continue;
             }
 
-            // Sort sections by start time before handing to the schedule.
+            // Build schedule using new AddClass API — sort by start time first.
             sections.Sort((a, b) => a.Item1.startMinute.CompareTo(b.Item1.startMinute));
 
-            var schedule = new AgentSchedule(sections);
+            var schedule = new AgentSchedule();
+            foreach (var (section, classroomNode) in sections)
+                schedule.AddClass(section, classroomNode);
+
             agent.SetSchedule(schedule);
-            // Pass the first classroom as the initial targetRoom, plus the exit list.
-            agent.Init(sections[0].Item2, exitNodes);
+            bool isLastAgent = (total == agentCount - 1);
+            agent.SetSchedule(schedule);
+            Debug.Log($"Agent {total} startRoom: {sections[0].Item2?.name ?? "NULL"}");
+
+            agent.Init(sections[0].Item2);
+            
 
             _allAgents.Add(agent);
             total++;
@@ -169,6 +181,27 @@ public class ScheduleManager : MonoBehaviour
         }
 
         Debug.Log($"[ScheduleManager] Spawned {total} agents.");
+    }
+
+    // ── NavMesh spawn helper ──────────────────────────────────────────────────
+
+
+    private Vector3 GetNavMeshSpawnPoint(Vector3 origin)
+    {
+        // Try a small scatter first, then widen the search radius.
+        foreach (float radius in new float[] { spawnRadius, spawnRadius * 2f, 5f, 10f })
+        {
+            // Pick a random horizontal offset within the radius.
+            Vector2 circle = UnityEngine.Random.insideUnitCircle * radius;
+            Vector3 candidate = origin + new Vector3(circle.x, 0f, circle.y);
+
+            if (UnityEngine.AI.NavMesh.SamplePosition(
+                    candidate, out UnityEngine.AI.NavMeshHit hit, radius, UnityEngine.AI.NavMesh.AllAreas))
+                return hit.position;
+        }
+
+        Debug.LogWarning($"[ScheduleManager] Could not find NavMesh point near {origin} — using raw position.");
+        return origin;
     }
 
     public IReadOnlyList<NavigationAgent> AllAgents => _allAgents;

@@ -4,7 +4,8 @@ https://github.com/cheliotk/unity_abm_framework/blob/master/LICENSE
 */
 
 using System.Collections.Generic;
-
+using System.Diagnostics;
+using UnityEngine;
 namespace ABMU
 {
     namespace Core
@@ -123,6 +124,8 @@ namespace ABMU
             /// </summary>
             /// <param name="s">The stepper to be removed from the queue</param>
             void DeregisterDestroyedStepper(Stepper s){
+                UnityEngine.Debug.Log("Stepper: " + s );
+                if (s == null) return;
                 if(s.step == 1){
                     steppersEveryTick[s.stepperQueue][s.priority].Remove(s);
                 }
