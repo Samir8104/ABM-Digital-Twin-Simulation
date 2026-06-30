@@ -132077,6 +132077,56 @@ MeshCollider:
   m_Convex: 0
   m_CookingOptions: 30
   m_Mesh: {fileID: -4440158817779545676, guid: 85bc0cc5a2e8bcb4092f07103b00b52d, type: 3}
+--- !u!1 &1034242765
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1034242766}
+  - component: {fileID: 1034242767}
+  m_Layer: 0
+  m_Name: AmbientFillEmitter
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1034242766
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1034242765}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1034242767
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1034242765}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 50104a62959c14f8284a036217ebdf81, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::AmbientFillEmitter
+  csvPath: Assets/single_agent_test/ambient_particles/emitter_config.csv
+  visualParticleSize: 0.05
+  ambientColor: {r: 0.2, g: 0.6, b: 1, a: 1}
+  particleMaterial: {fileID: 2100000, guid: cd1e5a6f1e9712f46bc6fe8c2b9ac871, type: 2}
+  airflowStrength: 1
+  diffusionStrength: 0.02
 --- !u!1 &1034418101 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -87747851917667682, guid: 85bc0cc5a2e8bcb4092f07103b00b52d, type: 3}
@@ -203411,6 +203461,85 @@ MeshCollider:
   m_Convex: 0
   m_CookingOptions: 30
   m_Mesh: {fileID: -1032574278138916149, guid: 85bc0cc5a2e8bcb4092f07103b00b52d, type: 3}
+--- !u!1 &1351638512
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1351638515}
+  - component: {fileID: 1351638514}
+  - component: {fileID: 1351638513}
+  m_Layer: 0
+  m_Name: airflowManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1351638513
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1351638512}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a24cc22c191a14343b8aaad528f1d4c8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VelocityFieldVisualizer
+  showArrows: 1
+  toggleKey: 118
+  gridSpacing: 2
+  minSpeedToShow: 0.02
+  arrowScale: 2
+  arrowColor: {r: 0, g: 1, b: 1, a: 1}
+  lineWidth: 0.03
+  arrowHeadSize: 0.15
+  lineMaterial: {fileID: 0}
+--- !u!114 &1351638514
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1351638512}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 87162e62ffa6241aebd829f5e6bffae8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VelocityFieldLoader
+  velocityCSVFileName: 
+  caseConfigFileName: mceinry_two_rooms_hallway_draft.json
+  xMin: 0
+  yMin: 0
+  zMin: 0
+  xMax: 8.95
+  yMax: 4.308
+  zMax: 6.45
+  cellSize: 0.75
+  remapFenicsToUnity: 1
+  inletJetSpeedOverride: 0
+  jetSigma: 0.5
+  logOnLoad: 1
+--- !u!4 &1351638515
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1351638512}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 20.11072, y: 9.55556, z: 13.04768}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1351696421 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 839927697876948606, guid: 85bc0cc5a2e8bcb4092f07103b00b52d, type: 3}
@@ -272019,7 +272148,7 @@ MonoBehaviour:
   - {fileID: 1426010757}
   - {fileID: 1169227534}
   - {fileID: 1173366991}
-  maxTotalAgents: 500
+  maxTotalAgents: 100
 --- !u!4 &1877312287
 Transform:
   m_ObjectHideFlags: 0
@@ -307518,3 +307647,5 @@ SceneRoots:
   - {fileID: 986462162}
   - {fileID: 1498574435}
   - {fileID: 221788250}
+  - {fileID: 1351638515}
+  - {fileID: 1034242766}

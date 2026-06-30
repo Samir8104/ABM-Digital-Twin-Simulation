@@ -1,0 +1,1232 @@
+{
+  "case_id": "mceinry_two_rooms_hallway_draft",
+  "extraction_scope": {
+    "name": "first_two_floors",
+    "obj_vertical_axis": "y",
+    "obj_y_band": [
+      -2.0,
+      8.5
+    ],
+    "raw_obj_bbox_min": [
+      -39.713,
+      -5.563,
+      -69.636
+    ],
+    "raw_obj_bbox_max": [
+      104.284,
+      9.182,
+      55.312
+    ],
+    "selected_obj_bbox_min": [
+      -26.564,
+      -4.953,
+      -58.546
+    ],
+    "selected_obj_bbox_max": [
+      53.156,
+      9.182,
+      40.908
+    ],
+    "raw_object_count": 5037,
+    "selected_object_count": 3993,
+    "notes": "Runnable rectangular approximation containing the two supervisor-selected rooms plus the L-shaped hallway. The hallway is static airflow context; room doors are time-bounded open/closed patches.",
+    "active_representative_geometry": "two_rooms_plus_static_hallway",
+    "combined_selected_bbox_m": [
+      11.45,
+      2.3,
+      20.4,
+      8.75
+    ],
+    "supervisor_selection_areas_m": {
+      "left_representative_room": {
+        "bbox": [
+          11.45,
+          2.3,
+          15.85,
+          8.75
+        ],
+        "label": "Room 125",
+        "role": "room_with_operable_doors"
+      },
+      "hallway_static_airflow": {
+        "bbox": [
+          15.85,
+          3.25,
+          18.25,
+          8.65
+        ],
+        "label": "L-shaped hallway",
+        "role": "static_airflow_no_door_boundary"
+      },
+      "right_representative_room": {
+        "bbox": [
+          17.4,
+          2.35,
+          20.4,
+          5.3
+        ],
+        "label": "Room 127",
+        "role": "room_with_operable_doors"
+      }
+    },
+    "supervisor_selection_areas_local_m": {
+      "left_representative_room": {
+        "bbox": [
+          0.0,
+          0.0,
+          4.4,
+          6.45
+        ],
+        "color": "#c02c82",
+        "label": "Room 125",
+        "role": "room_with_operable_doors"
+      },
+      "hallway_static_airflow": {
+        "bbox": [
+          4.4,
+          0.95,
+          6.8,
+          6.35
+        ],
+        "color": "#39d12f",
+        "label": "L-shaped hallway",
+        "role": "static_airflow_no_door_boundary",
+        "floor_segments": [
+          [
+            4.4,
+            0.95,
+            5.95,
+            6.35
+          ],
+          [
+            5.95,
+            3.0,
+            6.8,
+            6.35
+          ]
+        ],
+        "polygon": [
+          [
+            4.4,
+            0.95
+          ],
+          [
+            5.95,
+            0.95
+          ],
+          [
+            5.95,
+            3.0
+          ],
+          [
+            6.8,
+            3.0
+          ],
+          [
+            6.8,
+            6.35
+          ],
+          [
+            4.4,
+            6.35
+          ]
+        ]
+      },
+      "right_representative_room": {
+        "bbox": [
+          5.95,
+          0.05,
+          8.95,
+          3.0
+        ],
+        "color": "#f2c300",
+        "label": "Room 127",
+        "role": "room_with_operable_doors"
+      }
+    },
+    "manual_door_markers_local_m": [
+      {
+        "name": "manual_left_room_lower_to_hallway_door",
+        "spaces": [
+          "left_representative_room",
+          "hallway_static_airflow"
+        ],
+        "center_xy": [
+          4.4,
+          1.15
+        ],
+        "orientation": "vertical",
+        "width": 0.95,
+        "height": 2.1,
+        "state": "time_bounded",
+        "open_at": 0.0,
+        "close_at": 10.0,
+        "ambient_concentration": 0.0,
+        "ambient_temperature": 293.15
+      },
+      {
+        "name": "manual_left_room_upper_to_hallway_door",
+        "spaces": [
+          "left_representative_room",
+          "hallway_static_airflow"
+        ],
+        "center_xy": [
+          4.4,
+          5.25
+        ],
+        "orientation": "vertical",
+        "width": 0.95,
+        "height": 2.1,
+        "state": "time_bounded",
+        "open_at": 0.0,
+        "close_at": 10.0,
+        "ambient_concentration": 0.0,
+        "ambient_temperature": 293.15
+      },
+      {
+        "name": "manual_right_room_left_to_hallway_door",
+        "spaces": [
+          "right_representative_room",
+          "hallway_static_airflow"
+        ],
+        "center_xy": [
+          6.25,
+          3.0
+        ],
+        "orientation": "horizontal",
+        "width": 0.95,
+        "height": 2.1,
+        "state": "time_bounded",
+        "open_at": 0.0,
+        "close_at": 10.0,
+        "ambient_concentration": 0.0,
+        "ambient_temperature": 293.15
+      },
+      {
+        "name": "manual_right_room_side_to_hallway_door",
+        "spaces": [
+          "right_representative_room",
+          "hallway_static_airflow"
+        ],
+        "center_xy": [
+          5.95,
+          2.1
+        ],
+        "orientation": "vertical",
+        "width": 0.95,
+        "height": 2.1,
+        "state": "time_bounded",
+        "open_at": 0.0,
+        "close_at": 10.0,
+        "ambient_concentration": 0.0,
+        "ambient_temperature": 293.15
+      },
+      {
+        "name": "manual_hallway_to_upper_room_opening_review",
+        "spaces": [
+          "hallway_static_airflow"
+        ],
+        "center_xy": [
+          6.8,
+          5.25
+        ],
+        "orientation": "vertical",
+        "width": 0.85,
+        "height": 2.1,
+        "state": "static_open",
+        "open_at": 0.0,
+        "close_at": null,
+        "ambient_concentration": 0.0,
+        "ambient_temperature": 293.15
+      }
+    ],
+    "feature_counts": {
+      "door": 3,
+      "window_or_glazing": 11,
+      "supply_diffuser": 20,
+      "column": 0,
+      "wall": 40,
+      "ceiling": 9
+    }
+  },
+  "geometry": {
+    "length_x": 8.95,
+    "length_y": 6.45,
+    "length_z": 4.308,
+    "mesh_size": 0.75,
+    "obstacle": {
+      "x": 4.4,
+      "y": 0.0,
+      "z": 0.0,
+      "dx": 0.12,
+      "dy": 0.968,
+      "dz": 4.308
+    }
+  },
+  "hvac": {
+    "inlet_face": "x_min",
+    "outlet_face": "x_max",
+    "inlet_velocity": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "inlet_patch": null,
+    "outlet_patch": null,
+    "ach": 6.0,
+    "notes": "Using actual ceiling supply diffuser centers from the OBJ extraction for HVAC visualization/metadata. Provisional role assignment for simplified Objective 1.2 cases: room-peripheral diffusers are inlets, more-central room diffusers are pseudo-return outlets. Hallway/outside-selected-geometry diffusers remain context-only. Whole side-wall faces remain only as the current solver fallback until ceiling boundary support and inlet/outlet verification are added.",
+    "selected_diffuser_name": "Supply_Diffuser___Square___Hosted_24__x_24___1220235_",
+    "selected_diffuser_local_center_m": [
+      5.223,
+      2.358,
+      2.444
+    ],
+    "system_type": "ceiling_diffusers",
+    "diffusers": [
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1228573_",
+        "center": [
+          8.336,
+          6.371,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "context_only",
+        "space_id": "outside_selected_geometry",
+        "space_label": "Outside selected geometry",
+        "distance_to_space_boundary": null,
+        "provisional_role_basis": "not used as active HVAC until return/exhaust locations are verified"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1220016_",
+        "center": [
+          7.01,
+          1.048,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "outlet",
+        "space_id": "room_127",
+        "space_label": "Room 127",
+        "distance_to_space_boundary": 0.998,
+        "provisional_role_basis": "more-central diffuser location treated as pseudo-return outlet until returns are verified"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1220705_",
+        "center": [
+          5.595,
+          4.01,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "context_only",
+        "space_id": "hallway",
+        "space_label": "Hallway",
+        "distance_to_space_boundary": 1.071,
+        "provisional_role_basis": "not used as active HVAC until return/exhaust locations are verified"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1220572_",
+        "center": [
+          5.595,
+          5.496,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "context_only",
+        "space_id": "hallway",
+        "space_label": "Hallway",
+        "distance_to_space_boundary": 0.854,
+        "provisional_role_basis": "not used as active HVAC until return/exhaust locations are verified"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1221904_",
+        "center": [
+          3.941,
+          0.955,
+          2.434
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "inlet",
+        "space_id": "room_125",
+        "space_label": "Room 125",
+        "distance_to_space_boundary": 0.459,
+        "provisional_role_basis": "nearest-to-room-boundary peripheral diffuser treated as supply inlet"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1219906_",
+        "center": [
+          7.944,
+          1.048,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "outlet",
+        "space_id": "room_127",
+        "space_label": "Room 127",
+        "distance_to_space_boundary": 0.998,
+        "provisional_role_basis": "more-central diffuser location treated as pseudo-return outlet until returns are verified"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1221338_",
+        "center": [
+          3.941,
+          5.384,
+          2.434
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "inlet",
+        "space_id": "room_125",
+        "space_label": "Room 125",
+        "distance_to_space_boundary": 0.459,
+        "provisional_role_basis": "nearest-to-room-boundary peripheral diffuser treated as supply inlet"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1219136_",
+        "center": [
+          3.025,
+          2.104,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "outlet",
+        "space_id": "room_125",
+        "space_label": "Room 125",
+        "distance_to_space_boundary": 1.375,
+        "provisional_role_basis": "more-central diffuser location treated as pseudo-return outlet until returns are verified"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1219027_",
+        "center": [
+          1.771,
+          2.104,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "outlet",
+        "space_id": "room_125",
+        "space_label": "Room 125",
+        "distance_to_space_boundary": 1.771,
+        "provisional_role_basis": "more-central diffuser location treated as pseudo-return outlet until returns are verified"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1218934_",
+        "center": [
+          0.656,
+          2.104,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "inlet",
+        "space_id": "room_125",
+        "space_label": "Room 125",
+        "distance_to_space_boundary": 0.656,
+        "provisional_role_basis": "nearest-to-room-boundary peripheral diffuser treated as supply inlet"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1218800_",
+        "center": [
+          1.167,
+          0.989,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "outlet",
+        "space_id": "room_125",
+        "space_label": "Room 125",
+        "distance_to_space_boundary": 0.989,
+        "provisional_role_basis": "more-central diffuser location treated as pseudo-return outlet until returns are verified"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1220383_",
+        "center": [
+          5.223,
+          1.73,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "context_only",
+        "space_id": "hallway",
+        "space_label": "Hallway",
+        "distance_to_space_boundary": 0.727,
+        "provisional_role_basis": "not used as active HVAC until return/exhaust locations are verified"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1220235_",
+        "center": [
+          5.223,
+          2.358,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "context_only",
+        "space_id": "hallway",
+        "space_label": "Hallway",
+        "distance_to_space_boundary": 0.727,
+        "provisional_role_basis": "not used as active HVAC until return/exhaust locations are verified"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1220234_",
+        "center": [
+          6.156,
+          2.359,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "inlet",
+        "space_id": "room_127",
+        "space_label": "Room 127",
+        "distance_to_space_boundary": 0.206,
+        "provisional_role_basis": "nearest-to-room-boundary peripheral diffuser treated as supply inlet"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1220233_",
+        "center": [
+          7.01,
+          2.342,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "inlet",
+        "space_id": "room_127",
+        "space_label": "Room 127",
+        "distance_to_space_boundary": 0.658,
+        "provisional_role_basis": "nearest-to-room-boundary peripheral diffuser treated as supply inlet"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1220231_",
+        "center": [
+          7.944,
+          2.342,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "outlet",
+        "space_id": "room_127",
+        "space_label": "Room 127",
+        "distance_to_space_boundary": 0.658,
+        "provisional_role_basis": "more-central diffuser location treated as pseudo-return outlet until returns are verified"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1219361_",
+        "center": [
+          3.025,
+          4.235,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "outlet",
+        "space_id": "room_125",
+        "space_label": "Room 125",
+        "distance_to_space_boundary": 1.375,
+        "provisional_role_basis": "more-central diffuser location treated as pseudo-return outlet until returns are verified"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1219360_",
+        "center": [
+          1.771,
+          4.235,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "outlet",
+        "space_id": "room_125",
+        "space_label": "Room 125",
+        "distance_to_space_boundary": 1.771,
+        "provisional_role_basis": "more-central diffuser location treated as pseudo-return outlet until returns are verified"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1219359_",
+        "center": [
+          0.656,
+          4.235,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "inlet",
+        "space_id": "room_125",
+        "space_label": "Room 125",
+        "distance_to_space_boundary": 0.656,
+        "provisional_role_basis": "nearest-to-room-boundary peripheral diffuser treated as supply inlet"
+      },
+      {
+        "name": "Supply_Diffuser___Square___Hosted_24__x_24___1219357_",
+        "center": [
+          1.167,
+          5.35,
+          2.444
+        ],
+        "size": [
+          0.186,
+          0.186
+        ],
+        "role": "outlet",
+        "space_id": "room_125",
+        "space_label": "Room 125",
+        "distance_to_space_boundary": 1.1,
+        "provisional_role_basis": "more-central diffuser location treated as pseudo-return outlet until returns are verified"
+      }
+    ],
+    "provisional_outlet_rule": "Remaining Room 125 and Room 127 ceiling diffuser locations are treated as pseudo-return outlets until actual return/exhaust locations are verified.",
+    "provisional_inlet_rule": "For Room 125, the 4 most peripheral ceiling diffusers are treated as inlets; for Room 127, the 2 most peripheral ceiling diffusers are treated as inlets.",
+    "ceiling_diffuser_role_counts": {
+      "hallway": {
+        "context_only": 4
+      },
+      "outside_selected_geometry": {
+        "context_only": 1
+      },
+      "room_125": {
+        "inlet": 4,
+        "outlet": 6
+      },
+      "room_127": {
+        "outlet": 3,
+        "inlet": 2
+      }
+    },
+    "fallback_boundary_note": "Temporary solver-only fallback: actual diffuser roles are stored under hvac.diffusers, but test.py currently applies whole exterior x_min/x_max faces because ceiling diffuser boundary support is not implemented yet."
+  },
+  "architectural_features": {
+    "doors": [],
+    "windows": []
+  },
+  "extracted_obj_features": {
+    "door_candidates": [
+      {
+        "name": "Single_Flush_INTERNAL_DOOR__951776_",
+        "face": "y_min",
+        "center": [
+          6.331,
+          1.883
+        ],
+        "size": [
+          0.059,
+          0.747
+        ],
+        "state": "time_bounded"
+      },
+      {
+        "name": "Single_Flush_INTERNAL_DOOR__882401_",
+        "face": "x_max",
+        "center": [
+          5.008,
+          1.883
+        ],
+        "size": [
+          0.325,
+          0.747
+        ],
+        "state": "time_bounded"
+      },
+      {
+        "name": "Single_Flush_INTERNAL_DOOR__882342_",
+        "face": "y_max",
+        "center": [
+          7.608,
+          1.883
+        ],
+        "size": [
+          0.325,
+          0.747
+        ],
+        "state": "time_bounded"
+      }
+    ],
+    "manual_room_door_candidates": [
+      {
+        "name": "manual_left_room_lower_to_hallway_door",
+        "spaces": [
+          "left_representative_room",
+          "hallway_static_airflow"
+        ],
+        "center_xy": [
+          4.4,
+          1.15
+        ],
+        "orientation": "vertical",
+        "width": 0.95,
+        "height": 2.1,
+        "state": "time_bounded",
+        "open_at": 0.0,
+        "close_at": 10.0,
+        "ambient_concentration": 0.0,
+        "ambient_temperature": 293.15
+      },
+      {
+        "name": "manual_left_room_upper_to_hallway_door",
+        "spaces": [
+          "left_representative_room",
+          "hallway_static_airflow"
+        ],
+        "center_xy": [
+          4.4,
+          5.25
+        ],
+        "orientation": "vertical",
+        "width": 0.95,
+        "height": 2.1,
+        "state": "time_bounded",
+        "open_at": 0.0,
+        "close_at": 10.0,
+        "ambient_concentration": 0.0,
+        "ambient_temperature": 293.15
+      },
+      {
+        "name": "manual_right_room_left_to_hallway_door",
+        "spaces": [
+          "right_representative_room",
+          "hallway_static_airflow"
+        ],
+        "center_xy": [
+          6.25,
+          3.0
+        ],
+        "orientation": "horizontal",
+        "width": 0.95,
+        "height": 2.1,
+        "state": "time_bounded",
+        "open_at": 0.0,
+        "close_at": 10.0,
+        "ambient_concentration": 0.0,
+        "ambient_temperature": 293.15
+      },
+      {
+        "name": "manual_right_room_side_to_hallway_door",
+        "spaces": [
+          "right_representative_room",
+          "hallway_static_airflow"
+        ],
+        "center_xy": [
+          5.95,
+          2.1
+        ],
+        "orientation": "vertical",
+        "width": 0.95,
+        "height": 2.1,
+        "state": "time_bounded",
+        "open_at": 0.0,
+        "close_at": 10.0,
+        "ambient_concentration": 0.0,
+        "ambient_temperature": 293.15
+      }
+    ],
+    "static_hallway_openings": [
+      {
+        "name": "manual_hallway_to_upper_room_opening_review",
+        "spaces": [
+          "hallway_static_airflow"
+        ],
+        "center_xy": [
+          6.8,
+          5.25
+        ],
+        "orientation": "vertical",
+        "width": 0.85,
+        "height": 2.1,
+        "state": "static_open",
+        "open_at": 0.0,
+        "close_at": null,
+        "ambient_concentration": 0.0,
+        "ambient_temperature": 293.15
+      }
+    ],
+    "window_or_glazing_candidates": [
+      {
+        "name": "System_Panel_Glazed__1187101_",
+        "face": "y_max",
+        "center": [
+          5.551,
+          2.856
+        ],
+        "size": [
+          0.484,
+          0.147
+        ],
+        "state": "closed"
+      },
+      {
+        "name": "System_Panel_Glazed__1186971_",
+        "face": "y_max",
+        "center": [
+          5.551,
+          2.856
+        ],
+        "size": [
+          0.484,
+          0.147
+        ],
+        "state": "closed"
+      },
+      {
+        "name": "System_Panel_Glazed__1186969_",
+        "face": "y_max",
+        "center": [
+          5.551,
+          2.856
+        ],
+        "size": [
+          0.484,
+          0.147
+        ],
+        "state": "closed"
+      },
+      {
+        "name": "System_Panel_Glazed__1060238_",
+        "face": "y_min",
+        "center": [
+          5.806,
+          2.014
+        ],
+        "size": [
+          0.252,
+          0.31
+        ],
+        "state": "closed"
+      },
+      {
+        "name": "System_Panel_Glazed__1186970_",
+        "face": "y_max",
+        "center": [
+          5.667,
+          2.856
+        ],
+        "size": [
+          0.246,
+          0.147
+        ],
+        "state": "closed"
+      },
+      {
+        "name": "System_Panel_Glazed__952356_",
+        "face": "y_min",
+        "center": [
+          5.806,
+          1.684
+        ],
+        "size": [
+          0.252,
+          0.31
+        ],
+        "state": "closed"
+      },
+      {
+        "name": "System_Panel_Glazed__952186_",
+        "face": "y_min",
+        "center": [
+          4.555,
+          1.845
+        ],
+        "size": [
+          0.25,
+          0.631
+        ],
+        "state": "closed"
+      },
+      {
+        "name": "System_Panel_Glazed__1187102_",
+        "face": "y_max",
+        "center": [
+          5.667,
+          2.856
+        ],
+        "size": [
+          0.246,
+          0.147
+        ],
+        "state": "closed"
+      },
+      {
+        "name": "System_Panel_Glazed__1187104_",
+        "face": "y_max",
+        "center": [
+          5.435,
+          2.856
+        ],
+        "size": [
+          0.246,
+          0.147
+        ],
+        "state": "closed"
+      },
+      {
+        "name": "System_Panel_Glazed__1186972_",
+        "face": "y_max",
+        "center": [
+          5.435,
+          2.856
+        ],
+        "size": [
+          0.246,
+          0.147
+        ],
+        "state": "closed"
+      },
+      {
+        "name": "System_Panel_Glazed__1187103_",
+        "face": "y_max",
+        "center": [
+          5.551,
+          2.856
+        ],
+        "size": [
+          0.484,
+          0.147
+        ],
+        "state": "closed"
+      }
+    ],
+    "supply_diffuser_centers_m": [
+      [
+        8.336,
+        6.371,
+        2.444
+      ],
+      [
+        7.01,
+        1.048,
+        2.444
+      ],
+      [
+        5.595,
+        4.01,
+        2.444
+      ],
+      [
+        5.595,
+        5.496,
+        2.444
+      ],
+      [
+        3.941,
+        0.955,
+        2.434
+      ],
+      [
+        7.944,
+        1.048,
+        2.444
+      ],
+      [
+        3.941,
+        5.384,
+        2.434
+      ],
+      [
+        3.025,
+        2.104,
+        2.444
+      ],
+      [
+        1.771,
+        2.104,
+        2.444
+      ],
+      [
+        0.656,
+        2.104,
+        2.444
+      ],
+      [
+        1.167,
+        0.989,
+        2.444
+      ],
+      [
+        5.223,
+        1.73,
+        2.444
+      ],
+      [
+        5.223,
+        2.358,
+        2.444
+      ],
+      [
+        6.156,
+        2.359,
+        2.444
+      ],
+      [
+        7.01,
+        2.342,
+        2.444
+      ],
+      [
+        7.944,
+        2.342,
+        2.444
+      ],
+      [
+        3.025,
+        4.235,
+        2.444
+      ],
+      [
+        1.771,
+        4.235,
+        2.444
+      ],
+      [
+        0.656,
+        4.235,
+        2.444
+      ],
+      [
+        1.167,
+        5.35,
+        2.444
+      ]
+    ]
+  },
+  "physics": {
+    "viscosity": 0.001,
+    "diffusivity": 0.01,
+    "total_time": 30.0,
+    "num_steps": 300,
+    "quick_total_time": 2.0,
+    "quick_num_steps": 20,
+    "navier_stokes_max_iterations": 20,
+    "navier_stokes_tolerance": 1e-06,
+    "navier_stokes_relaxation": 0.7
+  },
+  "aerosol_source": {
+    "center": [
+      2.8,
+      3.2,
+      1.5
+    ],
+    "scale": 10.0
+  },
+  "thermal": {
+    "stratification_strength": 0.0,
+    "vertical_temperature_gradient": 0.0,
+    "initial_temperature": 293.15,
+    "inlet_temperature": 289.15,
+    "thermal_diffusivity": 0.02,
+    "heat_source_center": [
+      5.817,
+      3.225,
+      1.2
+    ],
+    "heat_source_scale": 1.5
+  },
+  "occupant_forcing": {
+    "enabled": false,
+    "center": [
+      4.475,
+      3.225,
+      1.5
+    ],
+    "velocity": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "direction": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "scale": 0.0,
+    "time_scale": 1.0
+  },
+  "pino_geometry": {
+    "coordinate_system": "local_fenics_xy_m",
+    "description": "PINO-ready footprint for the supervisor-selected Room 125, Room 127, and the L-shaped hallway. Current CFD mesh remains rectangular; these polygons are exported as optional mask and signed-distance features.",
+    "spaces": [
+      {
+        "id": "room_125",
+        "label": "Room 125",
+        "role": "room",
+        "polygon": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            4.4,
+            0.0
+          ],
+          [
+            4.4,
+            6.45
+          ],
+          [
+            0.0,
+            6.45
+          ]
+        ]
+      },
+      {
+        "id": "hallway",
+        "label": "Hallway",
+        "role": "static_airflow_context",
+        "polygon": [
+          [
+            4.4,
+            0.95
+          ],
+          [
+            5.95,
+            0.95
+          ],
+          [
+            5.95,
+            3.0
+          ],
+          [
+            6.8,
+            3.0
+          ],
+          [
+            6.8,
+            6.35
+          ],
+          [
+            4.4,
+            6.35
+          ]
+        ]
+      },
+      {
+        "id": "room_127",
+        "label": "Room 127",
+        "role": "room",
+        "polygon": [
+          [
+            5.95,
+            0.05
+          ],
+          [
+            8.95,
+            0.05
+          ],
+          [
+            8.95,
+            3.0
+          ],
+          [
+            5.95,
+            3.0
+          ]
+        ]
+      }
+    ],
+    "openings": [
+      {
+        "name": "manual_left_room_lower_to_hallway_door",
+        "spaces": [
+          "room_125",
+          "hallway"
+        ],
+        "center_xy": [
+          4.4,
+          1.15
+        ],
+        "orientation": "vertical",
+        "width": 0.95,
+        "source": "manual_supervisor_markup"
+      },
+      {
+        "name": "manual_left_room_upper_to_hallway_door",
+        "spaces": [
+          "room_125",
+          "hallway"
+        ],
+        "center_xy": [
+          4.4,
+          5.25
+        ],
+        "orientation": "vertical",
+        "width": 0.95,
+        "source": "manual_supervisor_markup"
+      },
+      {
+        "name": "manual_right_room_top_to_hallway_door",
+        "spaces": [
+          "room_127",
+          "hallway"
+        ],
+        "center_xy": [
+          6.25,
+          3.0
+        ],
+        "orientation": "horizontal",
+        "width": 0.95,
+        "source": "manual_supervisor_markup"
+      },
+      {
+        "name": "manual_right_room_side_to_hallway_door",
+        "spaces": [
+          "room_127",
+          "hallway"
+        ],
+        "center_xy": [
+          5.95,
+          2.1
+        ],
+        "orientation": "vertical",
+        "width": 0.95,
+        "source": "manual_supervisor_markup"
+      }
+    ]
+  }
+}

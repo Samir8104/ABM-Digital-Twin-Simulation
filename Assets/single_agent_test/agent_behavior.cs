@@ -99,6 +99,7 @@ public class AgentBehaviorController : MonoBehaviour {
     }
 
     public void Sneeze() {
+        CoughForceField.Spawn(mouthParticles.transform.position, CoughForceField.Preset.Sneeze);
         CancelInvoke(nameof(ResumeBreathing));
         isBursting = true;
         ApplyProfile(EmissionProfiles.Sneezing);
@@ -109,6 +110,7 @@ public class AgentBehaviorController : MonoBehaviour {
     }
 
     public void Cough() {
+        CoughForceField.Spawn(mouthParticles.transform.position, CoughForceField.Preset.Cough);
         CancelInvoke(nameof(ResumeBreathing));
         isBursting = true;
         ApplyProfile(EmissionProfiles.Coughing);

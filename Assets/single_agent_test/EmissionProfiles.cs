@@ -54,7 +54,7 @@ public static class EmissionProfiles {
 
     public static BehaviorEmissionProfile Coughing = new BehaviorEmissionProfile {
         emissionRate    = 0f, // Coughing is episodic; continuous emission rate is zero.
-        burstCount      = 3000,
+        burstCount      = 300,
         initialSpeed    = 11.0f,
         particleSizeMin = 1e-6f,
         particleSizeMax = 1e-3f,
@@ -66,8 +66,8 @@ public static class EmissionProfiles {
 
     public static BehaviorEmissionProfile Sneezing = new BehaviorEmissionProfile {
         emissionRate    = 0f, // Sneezing is episodic; continuous emission rate is zero.
-        burstCount      = 40000,
-        initialSpeed    = 8.0f,
+        burstCount      = 600,
+        initialSpeed    = 30.0f,
         particleSizeMin = 1e-6f,
         particleSizeMax = 1e-3f,
         quantaPerParticle = 2.0f,  // Placeholder — see NOTE above. Highest value reflecting the largest particle count and deepest respiratory involvement of any behavior.
