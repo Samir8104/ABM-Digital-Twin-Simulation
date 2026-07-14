@@ -137,7 +137,7 @@ public class AmbientFillEmitter : MonoBehaviour
         var main             = ps.main;
         main.loop            = false;
         main.startSpeed      = 0f;
-        main.startLifetime   = 9999f;
+        main.startLifetime   = 5f;
         main.startSize       = visualParticleSize;
         main.startColor      = ambientColor;
         main.maxParticles    = cfg.Count + 64;

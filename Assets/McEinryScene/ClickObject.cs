@@ -23,14 +23,17 @@ public class ClickObject : MonoBehaviour
         if (Input.GetMouseButtonDown(0))
         {
             GameObject objectClicked = GetClickedObject(out _);
-            if (Agent.CompareTag(objectClicked.tag))
+            if (objectClicked != null)
             {
-                print("Clicked on agent: " + objectClicked.name);
-                outlineScript = objectClicked.GetComponent<Outline>();
-                outlineScript.enabled = true;
-                Debug.Log("Object transform: " + objectClicked.transform);
-                cameraOrbitFollow.setTarget(objectClicked.transform);
-                followingAgent = true;
+                if (Agent.CompareTag(objectClicked.tag))
+                {
+                    print("Clicked on agent: " + objectClicked.name);
+                    outlineScript = objectClicked.GetComponentInChildren<Outline>();
+                    outlineScript.enabled = true;
+                    Debug.Log("Object transform: " + objectClicked.transform);
+                    cameraOrbitFollow.setTarget(objectClicked.transform);
+                    followingAgent = true;
+                }
             }
         }
         if (Input.GetButtonDown("Cancel"))

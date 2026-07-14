@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using ABMU.Core;
 using UnityEngine.AI;
+using System.Collections;
 
 public class NavigationAgent : AbstractAgent
 {
@@ -51,7 +52,45 @@ public class NavigationAgent : AbstractAgent
     // causes the NullReferenceException in Scheduler.DeregisterDestroyedStepper.
     private readonly System.Collections.Generic.HashSet<string> _pendingRegistration = new();
 
-    // ── Setup ─────────────────────────────────────────────────────────────────
+    // ── Animation ─────────────────────────────────────────────────────────────
+    private bool _isMovingAnim = false;
+    private Coroutine _animTransitionCoroutine;
+    public Animator animator;
+
+
+
+    void SetMovingAnimState(bool isMoving)
+    {
+        if (animator == null || isMoving == _isMovingAnim) return;
+        _isMovingAnim = isMoving;
+
+        if (_animTransitionCoroutine != null) StopCoroutine(_animTransitionCoroutine);
+        _animTransitionCoroutine = StartCoroutine(isMoving ? BeginWalkingRoutine() : BeginIdleRoutine());
+    }
+
+    IEnumerator BeginWalkingRoutine()
+    {
+        animator.SetBool("isIdle", false);
+        animator.SetBool("stopWalking", false);
+        animator.SetBool("startWalking", true);
+
+        yield return new WaitForSeconds(2); // one-frame pulse so the transition condition registers
+
+        animator.SetBool("startWalking", false);
+        animator.SetBool("Walking", true);
+    }
+
+    IEnumerator BeginIdleRoutine()
+    {
+        animator.SetBool("startWalking", false);
+        animator.SetBool("Walking", false);
+        animator.SetBool("stopWalking", true);
+
+        yield return null;
+
+        animator.SetBool("stopWalking", false);
+        animator.SetBool("isIdle", true);
+    }
 
     public void SetSchedule(AgentSchedule schedule)
     {
@@ -66,6 +105,11 @@ public class NavigationAgent : AbstractAgent
         nmAgent = GetComponent<NavMeshAgent>();
         _time = FindObjectOfType<TimeManager>();
         _callStations = FindObjectsOfType<ElevatorCallStation>();
+        if(animator != null)
+        {
+            animator.SetBool("isIdle", true);
+            animator.SetBool("Walking", false);
+        }
 
         SetNMAgentProperties();
         targetRoom = startRoom;
@@ -358,6 +402,7 @@ public class NavigationAgent : AbstractAgent
 
         isNearTarget = true;
         nmAgent.isStopped = true;
+        SetMovingAnimState(false);
         SafeDestroyStepper("CheckDistToTarget");
         SafeDestroyStepper("Move");
 
@@ -526,11 +571,10 @@ public class NavigationAgent : AbstractAgent
 
         nmAgent.isStopped = false;
         nmAgent.SetDestination(target);
-
+        SetMovingAnimState(true);   
         SafeCreateStepper("CheckDistToTarget", CheckDistToTarget, 2, 100);
         SafeCreateStepper("Move", Move, 1, 105);
     }
-
     // ── Movement ──────────────────────────────────────────────────────────────
 
     void Move()
@@ -573,6 +617,8 @@ public class NavigationAgent : AbstractAgent
         target = station.transform.position;
         nmAgent.isStopped = false;
         nmAgent.SetDestination(target);
+        SetMovingAnimState(true);
+
 
         SafeDestroyStepper("CheckDistToTarget");
         SafeDestroyStepper("Move");
@@ -587,6 +633,7 @@ public class NavigationAgent : AbstractAgent
         _elevator = elevator;
         _isRiding = true;
         nmAgent.isStopped = true;
+        SetMovingAnimState(false);
         elevator.BoardAgent(this);
     }
 
