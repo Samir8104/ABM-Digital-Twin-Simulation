@@ -168,7 +168,6 @@ public class ScheduleManager : MonoBehaviour
 
             agent.SetSchedule(schedule);
             bool isLastAgent = (total == agentCount - 1);
-            agent.SetSchedule(schedule);
             Debug.Log($"Agent {total} startRoom: {sections[0].Item2?.name ?? "NULL"}");
 
             agent.Init(sections[0].Item2);

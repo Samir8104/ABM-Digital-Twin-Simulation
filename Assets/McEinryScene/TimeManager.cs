@@ -43,7 +43,7 @@ public class TimeManager : MonoBehaviour
         {
             isAm = false;
         }
-        if(CurrentHour >= endHour)
+        if (CurrentHour >= endHour)
         {
             CurrentMinute = 0;
             CurrentHour = 0;
@@ -56,22 +56,16 @@ public class TimeManager : MonoBehaviour
 
     private void UpdateUI()
     {
-        if(timeText != null)
-        {
-            // format
-            if (isAm)
-            {
-                timeText.text = $"{GetCurrentDayOfWeek()}, {CurrentHour:00}:{CurrentMinute:00} AM";
+        if (timeText == null) return;
 
-            } else
-            {
-                if(CurrentHour != 12)
-                {
-                    CurrentHour = CurrentHour - 12;
-                }
-                timeText.text = $"{GetCurrentDayOfWeek()}, {CurrentHour:00}:{CurrentMinute:00} PM";
+        int displayHour = CurrentHour;
+        string suffix = isAm ? "AM" : "PM";
 
-            }
-        }
+        if (!isAm && displayHour != 12)
+            displayHour -= 12;
+        else if (isAm && displayHour == 0)
+            displayHour = 12;
+
+        timeText.text = $"{GetCurrentDayOfWeek()}, {displayHour:00}:{CurrentMinute:00} {suffix}";
     }
 }
