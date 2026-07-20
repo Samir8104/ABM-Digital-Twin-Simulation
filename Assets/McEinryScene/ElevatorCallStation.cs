@@ -31,10 +31,16 @@ public class ElevatorCallStation : MonoBehaviour
     /// Hard check used both before an agent starts walking here AND on arrival.
     /// Returns true only when the queue genuinely has room right now.
     /// </summary>
-    public bool IsElevatorViable() =>
-        elevatorController != null &&
-        !elevatorController.IsFull &&
-        _waitingAgents.Count < maxWaitingAgents;
+    public bool IsElevatorViable()
+    {
+        if (elevatorController == null)
+        {
+            Debug.LogError($"[{name}] ElevatorCallStation has no ElevatorController assigned! " +
+                            "This station will never be usable.", this);
+            return false;
+        }
+        return !elevatorController.IsFull && _waitingAgents.Count < maxWaitingAgents;
+    }
 
     /// <summary>
     /// Called by NavigationAgent on arrival. Returns true if the agent was

@@ -112,7 +112,6 @@ public class NavigationAgent : AbstractAgent
 
         SetNMAgentProperties();
         targetRoom = startRoom;
-        Debug.Log(name + " just used it's init function.");
         SafeCreateStepper("DeferredInit", DeferredInit, 1, 1);
     }
 
@@ -289,7 +288,6 @@ public class NavigationAgent : AbstractAgent
             }
             else if (roll < 0.40f) 
             {
-                Debug.Log("Going to office hours");
                 GoToOfficeHours();
             }
             else
@@ -554,17 +552,18 @@ public class NavigationAgent : AbstractAgent
     }
     // ── Navigation ────────────────────────────────────────────────────────────
 
-    void NavigateTo(GameObject room)
+
+   void NavigateTo(GameObject room)
     {
         if (room == null) return;
 
         int newFloor = GetFloorOfRoom(room);
-        int thisFloor = GetFloorOfRoom(targetRoom);
+        int thisFloor = GetFloorFromPosition(transform.position);  
 
         if (newFloor != thisFloor && newFloor >= 0 && thisFloor >= 0)
         {
             ElevatorCallStation station = GetBestStationForFloor(thisFloor);
-            if (station != null && Random.value < 0.80f)
+            if (station != null)
             {
                 StartElevatorJourney(room, newFloor, station);
                 return;
@@ -573,6 +572,18 @@ public class NavigationAgent : AbstractAgent
 
         SetTarget(room);
     }
+    private int GetFloorFromPosition(Vector3 pos)
+    {
+        int best = -1;
+        float bestDist = float.MaxValue;
+        foreach (var s in _callStations)
+        {
+            float dist = Mathf.Abs(s.transform.position.y - pos.y);
+            if (dist < bestDist) { bestDist = dist; best = s.floorIndex; }
+        }
+        return best;
+    }
+
 
     void NavigateDirect(GameObject room)
     {
@@ -691,11 +702,14 @@ public class NavigationAgent : AbstractAgent
         float roomY = room.transform.position.y;
         int best = -1;
         float bestDist = float.MaxValue;
+        ElevatorCallStation bestStation = null;
         foreach (var s in _callStations)
         {
             float dist = Mathf.Abs(s.transform.position.y - roomY);
-            if (dist < bestDist) { bestDist = dist; best = s.floorIndex; }
+            if (dist < bestDist) { bestDist = dist; best = s.floorIndex; bestStation = s; }
         }
+        Debug.Log($"[GetFloorOfRoom] room={room.name} roomY={roomY:F2} → matched station={bestStation?.name}, " +
+                  $"stationY={bestStation?.transform.position.y:F2}, floorIndex={best}, dist={bestDist:F2}");
         return best;
     }
 
