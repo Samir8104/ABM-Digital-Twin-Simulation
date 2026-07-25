@@ -37,6 +37,7 @@ public class NavigationAgent : AbstractAgent
     private int _bathroomUrgeSteps = 0;
     private bool _bathroomUrgeActive = false;
     private bool _bathroomNeedPending = false;
+    private bool usedBathroomRecently = false;
 
     int _stayEndMinute = -1;
     // ── Stepper liveness tracking ─────────────────────────────────────────────
@@ -304,6 +305,12 @@ public class NavigationAgent : AbstractAgent
     // ── After bathroom / study finishes ──────────────────────────────────────
 
 
+    IEnumerator ResetBathroomBool()
+    {
+        yield return new WaitForSeconds(60);
+        usedBathroomRecently = false;
+    }
+
     void AfterActivityDecision()
     {
         int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
@@ -433,7 +440,13 @@ public class NavigationAgent : AbstractAgent
 
             case AgentActivity.GoingToBathroom:
                 _schedule.SetActivity(AgentActivity.InBathroom);
-                StartTimedStay(Random.Range(2, 6));
+                if(usedBathroomRecently == false) // prevents the agent from using the bathroom too often, causing unrealistic behaviour. 
+                {
+                    usedBathroomRecently = true;
+                    ResetBathroomBool();
+                    StartTimedStay(Random.Range(2, 6));
+
+                }
                 break;
 
             case AgentActivity.GoingToStudying:
@@ -478,10 +491,11 @@ public class NavigationAgent : AbstractAgent
     void StayInPlace()
     {
         _pendingRegistration.Remove("StayInPlace");
+        Debug.Log($"[{name}] should start staying in place.");
         int nowMinute = _time.CurrentHour * 60 +_time.CurrentMinute;
         if (nowMinute <= _stayEndMinute) return;
         SafeDestroyStepper("StayInPlace");
-
+        Debug.Log($"[{name}] should stop staying in place.");
         switch (_schedule.CurrentActivity)
         {
             case AgentActivity.Wandering:
