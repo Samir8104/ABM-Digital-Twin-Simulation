@@ -48,7 +48,7 @@ public class NavigationAgent : AbstractAgent
     private bool _stepperAlive_StayInPlace = false;
     private bool _stepperAlive_BathroomUrge = false;
 
-
+    public event System.Action<NavigationAgent> OnFinishedForDay;
 
     private readonly System.Collections.Generic.HashSet<string> _pendingRegistration = new();
 
@@ -102,15 +102,19 @@ public class NavigationAgent : AbstractAgent
         DepartureWindowMinutes = Random.Range(10, 21);
     }
 
-    // Creates steppers for the agent, also assigns scene scripts
+    private bool _fullyInitialized = false;
+
     public void Init(GameObject startRoom)
     {
+        if (_fullyInitialized) return;   
+        _fullyInitialized = true;
+
         base.Init();
         nCont = FindObjectOfType<NavigationController>();
         nmAgent = GetComponent<NavMeshAgent>();
         _time = FindObjectOfType<TimeManager>();
         _callStations = FindObjectsOfType<ElevatorCallStation>();
-        if(animator != null)
+        if (animator != null)
         {
             animator.SetBool("isIdle", true);
             animator.SetBool("Walking", false);
@@ -120,9 +124,6 @@ public class NavigationAgent : AbstractAgent
         targetRoom = startRoom;
         SafeCreateStepper("DeferredInit", DeferredInit, 1, 1);
     }
-
-
-
     // This is SUPPOSED to wake the agent up for class, but its never called
     // I'll make sure to use the function later for when we are simulating multiple days
     public void WakeUpForClass(AgentSchedule.ClassEntry classEntry, Vector3 spawnPosition)
@@ -437,6 +438,7 @@ public class NavigationAgent : AbstractAgent
 
         if (!hasMoreClasses)
             _schedule.SetActivity(AgentActivity.Done);
+            OnFinishedForDay?.Invoke(this);
     }
 
     // ── Arrival handling ──────────────────────────────────────────────────────
@@ -502,6 +504,45 @@ public class NavigationAgent : AbstractAgent
             default:
                 break;
         }
+    }
+
+
+    public void AssignNewSchedule(AgentSchedule schedule, GameObject startRoom, Vector3 spawnPos)
+    {
+        // First time this GameObject is used from the pool — run full one-time setup.
+        if (!_fullyInitialized)
+            Init(startRoom);
+
+        _schedule = schedule;
+        DepartureWindowMinutes = Random.Range(10, 21);
+
+        transform.position = spawnPos;
+        if (nmAgent != null)
+        {
+            nmAgent.Warp(spawnPos);
+            nmAgent.isStopped = false;
+        }
+
+        targetRoom = startRoom;
+        _classEndHandled = false;
+        _bathroomNeedPending = false;
+        _respawnAtMinute = -1;
+
+        if (_renderers == null) _renderers = GetComponentsInChildren<Renderer>();
+        if (_colliders == null) _colliders = GetComponentsInChildren<Collider>();
+        foreach (var r in _renderers) r.enabled = true;
+        foreach (var c in _colliders) c.enabled = true;
+
+        _schedule.SetActivity(AgentActivity.Idle);
+
+        // Important for REUSED pooled agents: ScheduleTick destroys itself once an
+        // agent's day is Done (see ScheduleTick's Done case). Init()'s DeferredInit
+        // only creates it once per GameObject lifetime, so a recycled agent on its
+        // 2nd/3rd use would otherwise never tick again. SafeCreateStepper is a
+        // no-op if it's already alive, so this is safe to call every time.
+        SafeCreateStepper("ScheduleTick", ScheduleTick, 30, 1);
+
+        ResetBathroomUrge();
     }
 
     // ── Timed stationary stay ─────────────────────────────────────────────────

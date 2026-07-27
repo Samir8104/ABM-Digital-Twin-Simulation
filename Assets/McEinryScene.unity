@@ -275365,8 +275365,11 @@ MonoBehaviour:
   - {fileID: 1169227534}
   - {fileID: 1173366991}
   maxTotalAgents: 200
+  minClassesPerAgent: 1
   maxClassesPerAgent: 4
-  _time: {fileID: 0}
+  activationLeadMinutes: 20
+  poolCheckInterval: 1
+  _time: {fileID: 1976079723}
 --- !u!4 &1877312287
 Transform:
   m_ObjectHideFlags: 0

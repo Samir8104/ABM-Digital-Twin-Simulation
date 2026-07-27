@@ -4,19 +4,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
-/// <summary>
-/// Spawns agents, assigns their schedules, and wires up scene references.
-///
-/// Key changes from the previous version:
-///   • Enrollment is randomised each run — a shuffled slot list means no two
-///     runs produce the same agent-to-section mapping.
-///   • Agents can hold multiple sections (multi-class days).  The manager
-///     groups sections by distributing shuffled slots round-robin across agents.
-/// </summary>
 public class ScheduleManager : MonoBehaviour
 {
-    // ── Inspector ─────────────────────────────────────────────────────────────
-
     [Header("References")]
     public GameObject agentPrefab;
     public CourseData courseData;
@@ -24,32 +13,37 @@ public class ScheduleManager : MonoBehaviour
     public float spawnRadius = 3f;
 
     [Header("Exits / Entrances")]
-    [Tooltip("Assign every door / exit node in the scene here. Agents heading " +
-             "to Leaving will pick one at random.")]
     public List<GameObject> exitNodes = new();
 
-    [Header("Cap (0 = unlimited)")]
-    [Tooltip("Hard cap on total unique agents spawned. 0 = no cap.")]
+    [Header("Cap (0 = unlimited concurrent agents)")]
     public int maxTotalAgents = 0;
 
     [Header("Realism")]
-    [Tooltip("Max classes a single agent can be assigned in one day.")]
+    public int minClassesPerAgent = 1;
     public int maxClassesPerAgent = 4;
 
-    // ── Internal ──────────────────────────────────────────────────────────────
+    [Header("Rolling Spawn")]
+    [Tooltip("How many sim-minutes before a virtual student's first class they may be activated.")]
+    public int activationLeadMinutes = 20;
+    [Tooltip("Real seconds between pool-refill checks.")]
+    public float poolCheckInterval = 1f;
 
     public TimeManager _time;
     private readonly Dictionary<string, GameObject> _roomByNumber = new();
     private readonly List<NavigationAgent> _allAgents = new();
 
+    // Virtual students not yet spawned, sorted by first-class start time.
+    private List<AgentSchedule> _pendingStudents = new();
+    private int _pendingCursor = 0;
 
-    // ── Unity ─────────────────────────────────────────────────────────────────
+    // Pool of agent GameObjects available for reuse.
+    private readonly List<NavigationAgent> _agentPool = new();
+    private readonly HashSet<NavigationAgent> _activeAgents = new();
 
     private void Awake()
     {
         if (courseData == null)
             courseData = Resources.Load<CourseData>("CourseData");
-
         if (courseData == null)
         {
             Debug.LogError("[ScheduleManager] CourseData not found.");
@@ -61,10 +55,8 @@ public class ScheduleManager : MonoBehaviour
     {
         _time = FindObjectOfType<TimeManager>();
         IndexSceneRooms();
-        StartCoroutine(SpawnAllAgentsCoroutine());
+        StartCoroutine(BuildAndSpawnCoroutine());
     }
-
-    // ── Room indexing ─────────────────────────────────────────────────────────
 
     private void IndexSceneRooms()
     {
@@ -78,20 +70,15 @@ public class ScheduleManager : MonoBehaviour
         Debug.Log($"[ScheduleManager] Indexed {_roomByNumber.Count} room nodes.");
     }
 
-    // ── Spawning ──────────────────────────────────────────────────────────────
-
-    private IEnumerator SpawnAllAgentsCoroutine()
+    private IEnumerator BuildAndSpawnCoroutine()
     {
-        yield return null; // Let ABMU finish its first Init pass.
+        yield return null;
 
         if (agentPrefab == null) { Debug.LogError("[ScheduleManager] agentPrefab is null!"); yield break; }
         if (spawnRoot == null) { Debug.LogError("[ScheduleManager] spawnRoot is null!"); yield break; }
 
-        // ── Step 1: build a flat list of (section, classroomNode) slots ──────
-        // Each slot represents one "student seat". We'll shuffle this list so
-        // no two runs assign the same agents to the same sections.
+        // ── Step 1: flat slot list ──────────────────────────────────────────
         var slots = new List<(CourseSection section, GameObject classroomNode)>();
-
         foreach (var section in courseData.sections)
         {
             if (!_roomByNumber.TryGetValue(section.roomNumber, out GameObject node))
@@ -103,47 +90,25 @@ public class ScheduleManager : MonoBehaviour
                 slots.Add((section, node));
         }
 
-        // ── Step 2: Fisher-Yates shuffle ─────────────────────────────────────
-        // This is the core fix for "same agents every run". By shuffling before
-        // assignment, every run produces a different agent-to-section mapping.
+        // ── Step 2: shuffle ──────────────────────────────────────────────────
         for (int i = slots.Count - 1; i > 0; i--)
         {
             int j = Random.Range(0, i + 1);
             (slots[i], slots[j]) = (slots[j], slots[i]);
         }
 
-        // ── Step 3: determine how many unique agents to spawn ─────────────────
-        int totalSlots = slots.Count;
-        int agentCount = maxTotalAgents > 0
-                         ? Mathf.Min(maxTotalAgents, totalSlots)
-                         : totalSlots;
-
-        // ── Step 4: distribute slots round-robin across agents ────────────────
-        // Agent 0 gets slot 0, slot agentCount, slot 2*agentCount, etc.
-        // Because the slot list is shuffled, each agent's classes come from
-        // random positions in the original course list — different every run.
-        // This naturally gives agents with lower indices more classes when
-        // totalSlots > agentCount (realistic: some students have more classes).
-        var agentSections = new List<List<(CourseSection, GameObject)>>(agentCount);
-        for (int i = 0; i < agentCount; i++)
-            agentSections.Add(new List<(CourseSection, GameObject)>());
-
-        // Rotating cursor keeps roughly the same fairness the old modulo gave —
-        // each slot still starts trying agents in round-robin order — but now
-        // skips any agent whose existing schedule would conflict, instead of
-        // blindly assigning by index.
-        int cursor = 0;
+        var students = new List<List<(CourseSection, GameObject)>>();
         int skippedForConflict = 0;
+
         foreach (var slot in slots)
         {
             bool assigned = false;
 
-            for (int attempt = 0; attempt < agentCount; attempt++)
+            // Try existing students that still have room and no conflict.
+            for (int i = 0; i < students.Count; i++)
             {
-                int agentIdx = (cursor + attempt) % agentCount;
-                var existing = agentSections[agentIdx];
-
-                if (existing.Count >= maxClassesPerAgent) continue;   // ← added: skip agents already at the cap
+                var existing = students[i];
+                if (existing.Count >= maxClassesPerAgent) continue;
 
                 bool conflict = false;
                 foreach (var (existingSection, _) in existing)
@@ -154,94 +119,134 @@ public class ScheduleManager : MonoBehaviour
                         break;
                     }
                 }
-
                 if (!conflict)
                 {
-                    agentSections[agentIdx].Add(slot);
-                    cursor = (agentIdx + 1) % agentCount;
+                    existing.Add(slot);
                     assigned = true;
                     break;
                 }
             }
 
             if (!assigned)
-                skippedForConflict++;
-        
-    }
-        // ── Step 4.5: validate — should never fire if the assignment loop is correct ──
-        for (int i = 0; i < agentSections.Count; i++)
-        {
-            var sections = agentSections[i];
-            for (int x = 0; x < sections.Count; x++)
             {
-                for (int y = x + 1; y < sections.Count; y++)
-                {
-                    if (SectionsConflict(sections[x].Item1, sections[y].Item1))
-                    {
-                        Debug.LogError($"[ScheduleManager] CONFLICT SURVIVED assignment for agent index {i}: " +
-                                        $"{sections[x].Item1.startMinute}-{sections[x].Item1.endMinute} vs " +
-                                        $"{sections[y].Item1.startMinute}-{sections[y].Item1.endMinute}");
-                    }
-                }
+                // Start a brand new virtual student for this slot.
+                students.Add(new List<(CourseSection, GameObject)> { slot });
             }
         }
 
-        if (skippedForConflict > 0)
-            Debug.LogWarning($"[ScheduleManager] {skippedForConflict} seat(s) could not be assigned without creating a schedule conflict.");
-
-        // ── Step 5: spawn one agent per schedule ──────────────────────────────
-        int total = 0;
-
-        for (int i = 0; i < agentCount; i++)
+        foreach (var student in students)
         {
-            var sections = agentSections[i];
-            if (sections.Count == 0) continue;
-
-            // Pick a random exit node and sample the NavMesh near it so agents
-            // never spawn underground or off-mesh.
-            Transform spawnOrigin = (exitNodes != null && exitNodes.Count > 0)
-                ? exitNodes[Random.Range(0, exitNodes.Count)].transform
-                : spawnRoot;
-
-            Vector3 pos = GetNavMeshSpawnPoint(spawnOrigin.position);
-
-            GameObject go = Instantiate(agentPrefab, pos, Quaternion.identity);
-            go.name = $"Agent_{total:0000}";
-
-            var agent = go.GetComponent<NavigationAgent>();
-
-            if (agent == null)
+            int target = Random.Range(minClassesPerAgent, maxClassesPerAgent + 1);
+            if (student.Count > target)
             {
-                Debug.LogError("[ScheduleManager] agentPrefab missing NavigationAgent!");
-                Destroy(go);
-                continue;
+                // Keep a random subset of size `target`.
+                for (int i = student.Count - 1; i >= target; i--)
+                    student.RemoveAt(Random.Range(0, student.Count));
             }
+        }
+        students.RemoveAll(s => s.Count == 0);
 
-            // Build schedule using new AddClass API — sort by start time first.
-            sections.Sort((a, b) => a.Item1.startMinute.CompareTo(b.Item1.startMinute));
-
+        // Sort each student's own classes by start time, then build AgentSchedules.
+        _pendingStudents = new List<AgentSchedule>(students.Count);
+        foreach (var student in students)
+        {
+            student.Sort((a, b) => a.Item1.startMinute.CompareTo(b.Item1.startMinute));
             var schedule = new AgentSchedule();
-            foreach (var (section, classroomNode) in sections)
-                schedule.AddClass(section, classroomNode);
-
-            agent.SetSchedule(schedule);
-            bool isLastAgent = (total == agentCount - 1);
-            Debug.Log($"Agent {total} startRoom: {sections[0].Item2?.name ?? "NULL"}");
-
-            agent.Init(sections[0].Item2);
-            
-
-            _allAgents.Add(agent);
-            total++;
-
-            yield return null; // One agent per frame — avoids NavMesh/ABMU burst.
+            foreach (var (section, node) in student)
+                schedule.AddClass(section, node);
+            _pendingStudents.Add(schedule);
         }
 
-        Debug.Log($"[ScheduleManager] Spawned {total} agents.");
+        // Sort the whole roster by first class start time so the rolling
+        // spawner pulls them in chronological order.
+        _pendingStudents.Sort((a, b) => a.GetClassAt(0).Section.startMinute
+                                  .CompareTo(b.GetClassAt(0).Section.startMinute));
+
+        Debug.Log($"[ScheduleManager] Built {_pendingStudents.Count} virtual student schedules " +
+                  $"from {slots.Count} slots.");
+
+        yield return StartCoroutine(FillPoolCoroutine());
+
+        StartCoroutine(PoolMaintenanceLoop());
     }
 
-    // ── NavMesh spawn helper ──────────────────────────────────────────────────
+    private IEnumerator PoolMaintenanceLoop()
+    {
+        var wait = new WaitForSeconds(poolCheckInterval);
+        while (true)
+        {
+            yield return wait;
+            yield return StartCoroutine(FillPoolCoroutine());
+        }
+    }
 
+    private IEnumerator FillPoolCoroutine()
+    {
+        int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
+        int capacity = maxTotalAgents > 0 ? maxTotalAgents : int.MaxValue;
+
+        while (_activeAgents.Count < capacity && _pendingCursor < _pendingStudents.Count)
+        {
+            var next = _pendingStudents[_pendingCursor];
+            int firstClassStart = next.GetClassAt(0).Section.startMinute;
+
+            // Only activate once we're within the lead window of their first class.
+            if (simMinute < firstClassStart - activationLeadMinutes)
+                break; // list is sorted, so nothing later needs checking yet either
+
+            _pendingCursor++;
+            SpawnOrReuseAgent(next);
+            yield return null; // spread activation across frames
+        }
+    }
+
+    private void SpawnOrReuseAgent(AgentSchedule schedule)
+    {
+        NavigationAgent agent = GetPooledAgent();
+
+        Transform spawnOrigin = (exitNodes != null && exitNodes.Count > 0)
+            ? exitNodes[Random.Range(0, exitNodes.Count)].transform
+            : spawnRoot;
+        Vector3 pos = GetNavMeshSpawnPoint(spawnOrigin.position);
+
+        agent.transform.position = pos;
+        agent.AssignNewSchedule(schedule, schedule.GetClassAt(0).ClassroomNode, pos);
+
+        _activeAgents.Add(agent);
+    }
+
+    private NavigationAgent GetPooledAgent()
+    {
+
+        for (int i = 0; i < _agentPool.Count; i++)
+        {
+            var a = _agentPool[i];
+            if (!_activeAgents.Contains(a))
+                return a;
+        }
+
+        GameObject go = Instantiate(agentPrefab, spawnRoot.position, Quaternion.identity);
+        go.name = $"Agent_{_agentPool.Count:0000}";
+        var agent = go.GetComponent<NavigationAgent>();
+        if (agent == null)
+        {
+            Debug.LogError("[ScheduleManager] agentPrefab missing NavigationAgent!");
+            Destroy(go);
+            return null;
+        }
+        agent.OnFinishedForDay += HandleAgentFinished;
+        _agentPool.Add(agent);
+        _allAgents.Add(agent);
+        return agent;
+    }
+
+    private void HandleAgentFinished(NavigationAgent agent)
+    {
+        _activeAgents.Remove(agent);
+        // FillPoolCoroutine's maintenance loop will pick up the freed slot
+        // on its next tick and hand this agent (or a new one) the next
+        // chronologically-ready virtual student.
+    }
 
     private static bool SectionsConflict(CourseSection a, CourseSection b)
     {
@@ -255,20 +260,16 @@ public class ScheduleManager : MonoBehaviour
         }
         return false;
     }
+
     private Vector3 GetNavMeshSpawnPoint(Vector3 origin)
     {
-        // Try a small scatter first, then widen the search radius.
         foreach (float radius in new float[] { spawnRadius, spawnRadius * 2f, 5f, 10f })
         {
-            // Pick a random horizontal offset within the radius.
-            Vector2 circle = UnityEngine.Random.insideUnitCircle * radius;
+            Vector2 circle = Random.insideUnitCircle * radius;
             Vector3 candidate = origin + new Vector3(circle.x, 0f, circle.y);
-
-            if (UnityEngine.AI.NavMesh.SamplePosition(
-                    candidate, out UnityEngine.AI.NavMeshHit hit, radius, UnityEngine.AI.NavMesh.AllAreas))
+            if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, radius, NavMesh.AllAreas))
                 return hit.position;
         }
-
         Debug.LogWarning($"[ScheduleManager] Could not find NavMesh point near {origin} — using raw position.");
         return origin;
     }
