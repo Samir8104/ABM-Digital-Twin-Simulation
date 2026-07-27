@@ -7,17 +7,17 @@ using UnityEngine.EventSystems;
 public class ClickObject : MonoBehaviour
 {
     public GameObject Agent;
+    public AgentDebugPanel debugPanel;  
+
     private bool followingAgent = false;
     Outline outlineScript = null;
     CameraOrbitFollow cameraOrbitFollow;
 
-    // Start is called before the first frame update
     void Start()
     {
-       cameraOrbitFollow = Camera.main.GetComponent<CameraOrbitFollow>();
+        cameraOrbitFollow = Camera.main.GetComponent<CameraOrbitFollow>();
     }
 
-    // Update is called once per frame
     void Update()
     {
         if (Input.GetMouseButtonDown(0))
@@ -30,9 +30,12 @@ public class ClickObject : MonoBehaviour
                     print("Clicked on agent: " + objectClicked.name);
                     outlineScript = objectClicked.GetComponentInChildren<Outline>();
                     outlineScript.enabled = true;
-                    Debug.Log("Object transform: " + objectClicked.transform);
                     cameraOrbitFollow.setTarget(objectClicked.transform);
                     followingAgent = true;
+
+                    var navAgent = objectClicked.GetComponentInChildren<NavigationAgent>();
+                    if (navAgent != null && debugPanel != null)
+                        debugPanel.Show(navAgent);
                 }
             }
         }
@@ -43,6 +46,7 @@ public class ClickObject : MonoBehaviour
                 cameraOrbitFollow.target = null;
                 outlineScript.enabled = false;
                 followingAgent = false;
+                if (debugPanel != null) debugPanel.Hide();
                 Debug.Log("Stopped following agent");
             }
         }

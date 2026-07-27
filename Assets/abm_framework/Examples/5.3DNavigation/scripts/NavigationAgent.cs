@@ -57,6 +57,9 @@ public class NavigationAgent : AbstractAgent
     private Coroutine _animTransitionCoroutine;
     public Animator animator;
 
+    private int _respawnAtMinute = -1;
+    private Renderer[] _renderers;
+    private Collider[] _colliders;
 
 
     void SetMovingAnimState(bool isMoving)
@@ -74,7 +77,7 @@ public class NavigationAgent : AbstractAgent
         animator.SetBool("stopWalking", false);
         animator.SetBool("startWalking", true);
 
-        yield return new WaitForSeconds(2); // one-frame pulse so the transition condition registers
+        yield return new WaitForSeconds(1); 
 
         animator.SetBool("startWalking", false);
         animator.SetBool("Walking", true);
@@ -92,12 +95,14 @@ public class NavigationAgent : AbstractAgent
         animator.SetBool("isIdle", true);
     }
 
+    //Sets the schedule for the agent
     public void SetSchedule(AgentSchedule schedule)
     {
         _schedule = schedule;
         DepartureWindowMinutes = Random.Range(10, 21);
     }
 
+    // Creates steppers for the agent, also assigns scene scripts
     public void Init(GameObject startRoom)
     {
         base.Init();
@@ -118,7 +123,8 @@ public class NavigationAgent : AbstractAgent
 
 
 
-
+    // This is SUPPOSED to wake the agent up for class, but its never called
+    // I'll make sure to use the function later for when we are simulating multiple days
     public void WakeUpForClass(AgentSchedule.ClassEntry classEntry, Vector3 spawnPosition)
     {
         transform.position = spawnPosition;
@@ -133,8 +139,7 @@ public class NavigationAgent : AbstractAgent
         ResetBathroomUrge();
     }
 
-    // ── Stepper lifecycle helpers ─────────────────────────────────────────────
-
+    // Creates stepper functions for the ABMU script. Steppers run every frame on a step interval.
     void SafeCreateStepper(string stepperName, ABMU.Utilities.Del method, int step, int priority)
     {
         switch (stepperName)
@@ -210,7 +215,6 @@ public class NavigationAgent : AbstractAgent
         DestroyStepper(stepperName);
     }
 
-    // ── DeferredInit ──────────────────────────────────────────────────────────
 
     void DeferredInit()
     {
@@ -237,6 +241,8 @@ public class NavigationAgent : AbstractAgent
         switch (_schedule.CurrentActivity)
         {
             case AgentActivity.OffCampus:
+                if (_respawnAtMinute >= 0 && simMinute >= _respawnAtMinute)
+                    RespawnAgent();
                 break;
 
             case AgentActivity.Idle:
@@ -256,7 +262,7 @@ public class NavigationAgent : AbstractAgent
                 {
                     _classEndHandled = true;
                     _schedule.SetActivity(AgentActivity.Wandering);
-                    StartTimedStay(Random.Range(1, 30));
+                    StartTimedStay(Random.Range(nCont.classExitLingerMin, nCont.classExitLingerMax + 1));
                 }
                 break;
 
@@ -387,25 +393,50 @@ public class NavigationAgent : AbstractAgent
         _schedule.SetActivity(AgentActivity.GoingToStudying);
         NavigateDirect(node);
     }
-
+    private bool _pendingLeaveIsExit = false;
     void LeaveBuilding()
     {
+        int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
+        var nextClass = _schedule.NextClass;
+
         GameObject exitNode = nCont.GetRandomExitNode();
-        if (exitNode == null) { DeactivateAgent(); return; }
+        if (exitNode == null) { DeactivateAgent(hasMoreClasses: false); return; }
+
+        // Decide respawn timing before leaving. If there's another class today,
+        // come back 15 min before it starts; otherwise this agent is done for the day.
+        if (nextClass.HasValue && nextClass.Value.Section.MeetsOnDay(_time.GetCurrentDayOfWeek()))
+            _respawnAtMinute = nextClass.Value.Section.startMinute - 15;
+        else
+            _respawnAtMinute = -1;
+
         _schedule.SetActivity(AgentActivity.GoingToExit);
+        _pendingLeaveIsExit = true;
         NavigateDirect(exitNode);
     }
 
     // ── Agent deactivation ────────────────────────────────────────────────────
 
-    void DeactivateAgent()
+    void DeactivateAgent(bool hasMoreClasses)
     {
         SafeDestroyStepper("CheckDistToTarget");
         SafeDestroyStepper("Move");
         SafeDestroyStepper("StayInPlace");
         SafeDestroyStepper("BathroomUrge");
+
         _schedule.SetActivity(AgentActivity.OffCampus);
-        gameObject.SetActive(false);
+
+        if (_renderers == null) _renderers = GetComponentsInChildren<Renderer>();
+        if (_colliders == null) _colliders = GetComponentsInChildren<Collider>();
+        foreach (var r in _renderers) r.enabled = false;
+        foreach (var c in _colliders) c.enabled = false;
+
+        // Stop the agent instead of disabling the component — avoids
+        // triggering NavMesh crowd/avoidance recomputation.
+        nmAgent.isStopped = true;
+        nmAgent.velocity = Vector3.zero;
+
+        if (!hasMoreClasses)
+            _schedule.SetActivity(AgentActivity.Done);
     }
 
     // ── Arrival handling ──────────────────────────────────────────────────────
@@ -459,11 +490,12 @@ public class NavigationAgent : AbstractAgent
                 break;
 
             case AgentActivity.GoingToExit:
-                DeactivateAgent();
+                DeactivateAgent(false);
                 break;
             case AgentActivity.GoingToOfficeHours:
-                _schedule.SetActivity(AgentActivity.InOfficeHours);
-                StartTimedStay(Random.Range(20, 60));
+                bool hasMore = _schedule.NextClass.HasValue &&
+               _schedule.NextClass.Value.Section.MeetsOnDay(_time.GetCurrentDayOfWeek());
+                DeactivateAgent(hasMoreClasses: hasMore);
                 break;
 
             default:
@@ -598,6 +630,26 @@ public class NavigationAgent : AbstractAgent
         return best;
     }
 
+
+    void RespawnAgent()
+    {
+        _respawnAtMinute = -1;
+
+        foreach (var r in _renderers) r.enabled = true;
+        foreach (var c in _colliders) c.enabled = true;
+
+        GameObject spawnNode = nCont.GetRandomExitNode();
+        if (spawnNode != null)
+        {
+            Vector3 pos = spawnNode.transform.position;
+            transform.position = pos;
+            nmAgent.Warp(pos);
+        }
+
+        nmAgent.isStopped = false;
+        _schedule.SetActivity(AgentActivity.Idle);
+        ResetBathroomUrge();
+    }
 
     void NavigateDirect(GameObject room)
     {

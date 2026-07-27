@@ -11,10 +11,13 @@ public class NavigationController : AbstractController
     public float heatmapUpperBound = 0.15f;
     public Gradient heatmapGradient;
 
+
     [Header("Agent Parameters")]
     public float distToTargetThreshold = 2f;
     public LayerMask agentLm;
     public GameObject agentPrefab;
+    public int classExitLingerMin = 1;
+    public int classExitLingerMax = 5;
 
     [Header("Room Selection Weights")]
     public float lowWeight = 0.1f;

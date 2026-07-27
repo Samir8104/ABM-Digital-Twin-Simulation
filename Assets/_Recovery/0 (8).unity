@@ -271007,8 +271007,6 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 0
   agentPrefab: {fileID: 3623324467911447722, guid: 5a9bd96456c30ba4ab6d266ab595bdd6, type: 3}
-  classExitLingerMin: 1
-  classExitLingerMax: 5
   lowWeight: 0.15
   midWeight: 0.35
   highWeight: 0.5
@@ -287474,7 +287472,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e2c232776adf0b14188c9799fda411e1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: '::'
-  timeMultipler: 60
+  timeMultipler: 120
   timeText: {fileID: 1275460631}
   startHour: 8
   endHour: 20

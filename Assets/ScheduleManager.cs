@@ -32,9 +32,13 @@ public class ScheduleManager : MonoBehaviour
     [Tooltip("Hard cap on total unique agents spawned. 0 = no cap.")]
     public int maxTotalAgents = 0;
 
+    [Header("Realism")]
+    [Tooltip("Max classes a single agent can be assigned in one day.")]
+    public int maxClassesPerAgent = 4;
+
     // ── Internal ──────────────────────────────────────────────────────────────
 
-    private TimeManager _time;
+    public TimeManager _time;
     private readonly Dictionary<string, GameObject> _roomByNumber = new();
     private readonly List<NavigationAgent> _allAgents = new();
 
@@ -124,15 +128,69 @@ public class ScheduleManager : MonoBehaviour
         for (int i = 0; i < agentCount; i++)
             agentSections.Add(new List<(CourseSection, GameObject)>());
 
-        for (int slotIdx = 0; slotIdx < totalSlots; slotIdx++)
+        // Rotating cursor keeps roughly the same fairness the old modulo gave —
+        // each slot still starts trying agents in round-robin order — but now
+        // skips any agent whose existing schedule would conflict, instead of
+        // blindly assigning by index.
+        int cursor = 0;
+        int skippedForConflict = 0;
+        foreach (var slot in slots)
         {
-            int agentIdx = slotIdx % agentCount;
-            agentSections[agentIdx].Add(slots[slotIdx]);
+            bool assigned = false;
+
+            for (int attempt = 0; attempt < agentCount; attempt++)
+            {
+                int agentIdx = (cursor + attempt) % agentCount;
+                var existing = agentSections[agentIdx];
+
+                if (existing.Count >= maxClassesPerAgent) continue;   // ← added: skip agents already at the cap
+
+                bool conflict = false;
+                foreach (var (existingSection, _) in existing)
+                {
+                    if (SectionsConflict(existingSection, slot.section))
+                    {
+                        conflict = true;
+                        break;
+                    }
+                }
+
+                if (!conflict)
+                {
+                    agentSections[agentIdx].Add(slot);
+                    cursor = (agentIdx + 1) % agentCount;
+                    assigned = true;
+                    break;
+                }
+            }
+
+            if (!assigned)
+                skippedForConflict++;
+        
+    }
+        // ── Step 4.5: validate — should never fire if the assignment loop is correct ──
+        for (int i = 0; i < agentSections.Count; i++)
+        {
+            var sections = agentSections[i];
+            for (int x = 0; x < sections.Count; x++)
+            {
+                for (int y = x + 1; y < sections.Count; y++)
+                {
+                    if (SectionsConflict(sections[x].Item1, sections[y].Item1))
+                    {
+                        Debug.LogError($"[ScheduleManager] CONFLICT SURVIVED assignment for agent index {i}: " +
+                                        $"{sections[x].Item1.startMinute}-{sections[x].Item1.endMinute} vs " +
+                                        $"{sections[y].Item1.startMinute}-{sections[y].Item1.endMinute}");
+                    }
+                }
+            }
         }
+
+        if (skippedForConflict > 0)
+            Debug.LogWarning($"[ScheduleManager] {skippedForConflict} seat(s) could not be assigned without creating a schedule conflict.");
 
         // ── Step 5: spawn one agent per schedule ──────────────────────────────
         int total = 0;
-
 
         for (int i = 0; i < agentCount; i++)
         {
@@ -185,6 +243,18 @@ public class ScheduleManager : MonoBehaviour
     // ── NavMesh spawn helper ──────────────────────────────────────────────────
 
 
+    private static bool SectionsConflict(CourseSection a, CourseSection b)
+    {
+        bool timeOverlap = a.startMinute < b.endMinute && b.startMinute < a.endMinute;
+        if (!timeOverlap) return false;
+
+        foreach (TimeManager.DayOfWeek day in System.Enum.GetValues(typeof(TimeManager.DayOfWeek)))
+        {
+            if (a.MeetsOnDay(day) && b.MeetsOnDay(day))
+                return true;
+        }
+        return false;
+    }
     private Vector3 GetNavMeshSpawnPoint(Vector3 origin)
     {
         // Try a small scatter first, then widen the search radius.
