@@ -490,12 +490,13 @@ public class NavigationAgent : AbstractAgent
                 break;
 
             case AgentActivity.GoingToExit:
-                DeactivateAgent(false);
-                break;
-            case AgentActivity.GoingToOfficeHours:
                 bool hasMore = _schedule.NextClass.HasValue &&
                _schedule.NextClass.Value.Section.MeetsOnDay(_time.GetCurrentDayOfWeek());
                 DeactivateAgent(hasMoreClasses: hasMore);
+                break;
+            case AgentActivity.GoingToOfficeHours:
+                _schedule.SetActivity(AgentActivity.InOfficeHours);
+                StartTimedStay(Random.Range(10, 30));
                 break;
 
             default:
