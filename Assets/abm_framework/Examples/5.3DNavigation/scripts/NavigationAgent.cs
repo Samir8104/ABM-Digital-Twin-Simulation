@@ -475,9 +475,10 @@ public class NavigationAgent : AbstractAgent
                 _schedule.SetActivity(AgentActivity.InBathroom);
                 if(usedBathroomRecently == false) // prevents the agent from using the bathroom too often, causing unrealistic behaviour. 
                 {
-                    usedBathroomRecently = true;
                     ResetBathroomBool();
-                    StartTimedStay(Random.Range(2, 6));
+                    int randomTime = Random.Range(2, 6);
+                    Debug.Log($"[{name}] is staying in the bathroom for " + randomTime + " minutes"); // this only fires once, so that means the problem is in startTimedstay
+                    StartTimedStay(randomTime);
 
                 }
                 break;
@@ -554,22 +555,25 @@ public class NavigationAgent : AbstractAgent
         SafeDestroyStepper("StayInPlace");
         int nowMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
         _stayEndMinute = nowMinute + simMinutes;
+        // so this prints a lot
+        if (usedBathroomRecently == false) // if statement to prevent it from looping
+        {
+            usedBathroomRecently = true;
+            Debug.Log($"[{name}] StartTimedStay called: nowMinute={nowMinute}, " +
+             $"duration={simMinutes}, newEnd={_stayEndMinute}, " +
+             $"activity={_schedule.CurrentActivity}\n{System.Environment.StackTrace}");
 
-        Debug.Log($"[{name}] StartTimedStay called: nowMinute={nowMinute}, " +
-                  $"duration={simMinutes}, newEnd={_stayEndMinute}, " +
-                  $"activity={_schedule.CurrentActivity}\n{System.Environment.StackTrace}");
-
-        SafeCreateStepper("StayInPlace", StayInPlace, 2, 1);
+            SafeCreateStepper("StayInPlace", StayInPlace, 2, 1);
+        }
+        
     }
 
     void StayInPlace()
     {
         _pendingRegistration.Remove("StayInPlace");
-        Debug.Log($"[{name}] should start staying in place.");
         int nowMinute = _time.CurrentHour * 60 +_time.CurrentMinute;
         if (nowMinute <= _stayEndMinute) return;
         SafeDestroyStepper("StayInPlace");
-        Debug.Log($"[{name}] should stop staying in place.");
         switch (_schedule.CurrentActivity)
         {
             case AgentActivity.Wandering:
