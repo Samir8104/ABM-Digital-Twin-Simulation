@@ -5,6 +5,7 @@ using System.Collections;
 
 public class NavigationAgent : AbstractAgent
 {
+    #region References
     // ── Scene references ──────────────────────────────────────────────────────
     NavigationController nCont;
     NavMeshAgent nmAgent;
@@ -60,8 +61,9 @@ public class NavigationAgent : AbstractAgent
     private int _respawnAtMinute = -1;
     private Renderer[] _renderers;
     private Collider[] _colliders;
+    #endregion
 
-
+    #region Initilizations
     void SetMovingAnimState(bool isMoving)
     {
         if (animator == null || isMoving == _isMovingAnim) return;
@@ -100,6 +102,12 @@ public class NavigationAgent : AbstractAgent
     {
         _schedule = schedule;
         DepartureWindowMinutes = Random.Range(10, 21);
+    }
+    void SetNMAgentProperties()
+    {
+        nmAgent.updatePosition = false;
+        nmAgent.velocity = Vector3.zero;
+        nmAgent.acceleration = 999f;
     }
 
     private bool _fullyInitialized = false;
@@ -227,9 +235,9 @@ public class NavigationAgent : AbstractAgent
         SafeDestroyStepper("DeferredInit");
         SafeCreateStepper("ScheduleTick", ScheduleTick, 30, 1);
     }
+    #endregion
 
-    // ── ScheduleTick ──────────────────────────────────────────────────────────
-
+    #region AgentDecisions
     void ScheduleTick()
     {
         
@@ -366,9 +374,9 @@ public class NavigationAgent : AbstractAgent
             StartTimedStay(Mathf.Clamp(gapMinutes - DepartureWindowMinutes, 5, 60));
         }
     }
+    #endregion
 
-    // ── Activity helpers ──────────────────────────────────────────────────────
-
+    #region ActivityHelpers
     void GoToBathroom()
     {
         GameObject node = nCont.GetClosestBathroomNode(transform.position);
@@ -414,8 +422,9 @@ public class NavigationAgent : AbstractAgent
         _pendingLeaveIsExit = true;
         NavigateDirect(exitNode);
     }
+    #endregion
 
-    // ── Agent deactivation ────────────────────────────────────────────────────
+    #region DeactivateAgents
 
     void DeactivateAgent(bool hasMoreClasses)
     {
@@ -441,73 +450,28 @@ public class NavigationAgent : AbstractAgent
             OnFinishedForDay?.Invoke(this);
     }
 
-    // ── Arrival handling ──────────────────────────────────────────────────────
-
-    void CheckDistToTarget()
+    void RespawnAgent()
     {
-        _pendingRegistration.Remove("CheckDistToTarget");
-        float d = Vector3.Distance(transform.position, target);
-        if (d >= nCont.distToTargetThreshold) { isNearTarget = false; return; }
+        _respawnAtMinute = -1;
 
-        isNearTarget = true;
-        nmAgent.isStopped = true;
-        SetMovingAnimState(false);
-        SafeDestroyStepper("CheckDistToTarget");
-        SafeDestroyStepper("Move");
+        foreach (var r in _renderers) r.enabled = true;
+        foreach (var c in _colliders) c.enabled = true;
 
-        if (_pendingCallStation != null)
+        GameObject spawnNode = nCont.GetRandomExitNode();
+        if (spawnNode != null)
         {
-            ElevatorCallStation station = _pendingCallStation;
-            int destFloor = _pendingDestFloor;
-            _pendingCallStation = null;
-            if (!station.TryRegisterWaitingAgent(this, destFloor))
-                TakeStairs(targetRoom);
-            return;
+            Vector3 pos = spawnNode.transform.position;
+            transform.position = pos;
+            nmAgent.Warp(pos);
         }
 
-        switch (_schedule.CurrentActivity)
-        {
-            case AgentActivity.GoingToClass:
-                _schedule.SetActivity(AgentActivity.InClass);
-                break;
-
-            case AgentActivity.GoingToBathroom:
-                _schedule.SetActivity(AgentActivity.InBathroom);
-                if(usedBathroomRecently == false) // prevents the agent from using the bathroom too often, causing unrealistic behaviour. 
-                {
-                    ResetBathroomBool();
-                    int randomTime = Random.Range(2, 6);
-                    Debug.Log($"[{name}] is staying in the bathroom for " + randomTime + " minutes"); // this only fires once, so that means the problem is in startTimedstay
-                    StartTimedStay(randomTime);
-
-                }
-                break;
-
-            case AgentActivity.GoingToStudying:
-                _schedule.SetActivity(AgentActivity.InStudying);
-                // Short, per-agent-jittered check-in instead of a blind 60-120 min roll.
-                // AfterActivityDecision (called when this elapses) already knows how to
-                // send the agent to a class, leave the building, or wait again — we just
-                // need to actually reach it soon instead of locking in for hours up front.
-                StartTimedStay(Random.Range(10, 21));
-                break;
-
-            case AgentActivity.GoingToExit:
-                bool hasMore = _schedule.NextClass.HasValue &&
-               _schedule.NextClass.Value.Section.MeetsOnDay(_time.GetCurrentDayOfWeek());
-                DeactivateAgent(hasMoreClasses: hasMore);
-                break;
-            case AgentActivity.GoingToOfficeHours:
-                _schedule.SetActivity(AgentActivity.InOfficeHours);
-                StartTimedStay(Random.Range(10, 30));
-                break;
-
-            default:
-                break;
-        }
+        nmAgent.isStopped = false;
+        _schedule.SetActivity(AgentActivity.Idle);
+        ResetBathroomUrge();
     }
+    #endregion
 
-
+    #region Schedule
     public void AssignNewSchedule(AgentSchedule schedule, GameObject startRoom, Vector3 spawnPos)
     {
         // First time this GameObject is used from the pool — run full one-time setup.
@@ -545,9 +509,9 @@ public class NavigationAgent : AbstractAgent
 
         ResetBathroomUrge();
     }
+    #endregion
 
-    // ── Timed stationary stay ─────────────────────────────────────────────────
-
+    #region TimedStay
     int _stayMinutesRemaining = 0;
 
     void StartTimedStay(int simMinutes)
@@ -593,9 +557,9 @@ public class NavigationAgent : AbstractAgent
                 break;
         }
     }
+    #endregion
 
-    // ── Bathroom urge system ──────────────────────────────────────────────────
-
+    #region Bathroom
     private const int BATHROOM_URGE_MIN = 180;
     private const int BATHROOM_URGE_MAX = 360;
 
@@ -642,10 +606,10 @@ public class NavigationAgent : AbstractAgent
 
         ResetBathroomUrge();
     }
-    // ── Navigation ────────────────────────────────────────────────────────────
+    #endregion Bathroom
 
-
-   void NavigateTo(GameObject room)
+    #region Navigation
+    void NavigateTo(GameObject room)
     {
         if (room == null) return;
 
@@ -664,6 +628,69 @@ public class NavigationAgent : AbstractAgent
 
         SetTarget(room);
     }
+    void CheckDistToTarget()
+    {
+        _pendingRegistration.Remove("CheckDistToTarget");
+        float d = Vector3.Distance(transform.position, target);
+        if (d >= nCont.distToTargetThreshold) { isNearTarget = false; return; }
+
+        isNearTarget = true;
+        nmAgent.isStopped = true;
+        SetMovingAnimState(false);
+        SafeDestroyStepper("CheckDistToTarget");
+        SafeDestroyStepper("Move");
+
+        if (_pendingCallStation != null)
+        {
+            ElevatorCallStation station = _pendingCallStation;
+            int destFloor = _pendingDestFloor;
+            _pendingCallStation = null;
+            if (!station.TryRegisterWaitingAgent(this, destFloor))
+                TakeStairs(targetRoom);
+            return;
+        }
+
+        switch (_schedule.CurrentActivity)
+        {
+            case AgentActivity.GoingToClass:
+                _schedule.SetActivity(AgentActivity.InClass);
+                break;
+
+            case AgentActivity.GoingToBathroom:
+                _schedule.SetActivity(AgentActivity.InBathroom);
+                if (usedBathroomRecently == false) // prevents the agent from using the bathroom too often, causing unrealistic behaviour. 
+                {
+                    ResetBathroomBool();
+                    int randomTime = Random.Range(2, 6);
+                    Debug.Log($"[{name}] is staying in the bathroom for " + randomTime + " minutes"); // this only fires once, so that means the problem is in startTimedstay
+                    StartTimedStay(randomTime);
+
+                }
+                break;
+
+            case AgentActivity.GoingToStudying:
+                _schedule.SetActivity(AgentActivity.InStudying);
+                // Short, per-agent-jittered check-in instead of a blind 60-120 min roll.
+                // AfterActivityDecision (called when this elapses) already knows how to
+                // send the agent to a class, leave the building, or wait again — we just
+                // need to actually reach it soon instead of locking in for hours up front.
+                StartTimedStay(Random.Range(10, 21));
+                break;
+
+            case AgentActivity.GoingToExit:
+                bool hasMore = _schedule.NextClass.HasValue &&
+               _schedule.NextClass.Value.Section.MeetsOnDay(_time.GetCurrentDayOfWeek());
+                DeactivateAgent(hasMoreClasses: hasMore);
+                break;
+            case AgentActivity.GoingToOfficeHours:
+                _schedule.SetActivity(AgentActivity.InOfficeHours);
+                StartTimedStay(Random.Range(10, 30));
+                break;
+
+            default:
+                break;
+        }
+    }
     private int GetFloorFromPosition(Vector3 pos)
     {
         int best = -1;
@@ -677,25 +704,7 @@ public class NavigationAgent : AbstractAgent
     }
 
 
-    void RespawnAgent()
-    {
-        _respawnAtMinute = -1;
 
-        foreach (var r in _renderers) r.enabled = true;
-        foreach (var c in _colliders) c.enabled = true;
-
-        GameObject spawnNode = nCont.GetRandomExitNode();
-        if (spawnNode != null)
-        {
-            Vector3 pos = spawnNode.transform.position;
-            transform.position = pos;
-            nmAgent.Warp(pos);
-        }
-
-        nmAgent.isStopped = false;
-        _schedule.SetActivity(AgentActivity.Idle);
-        ResetBathroomUrge();
-    }
 
     void NavigateDirect(GameObject room)
     {
@@ -719,8 +728,9 @@ public class NavigationAgent : AbstractAgent
         SafeCreateStepper("CheckDistToTarget", CheckDistToTarget, 2, 100);
         SafeCreateStepper("Move", Move, 1, 105);
     }
-    // ── Movement ──────────────────────────────────────────────────────────────
+    #endregion
 
+    #region Movement
     void Move()
     {
         _pendingRegistration.Remove("Move");
@@ -731,7 +741,6 @@ public class NavigationAgent : AbstractAgent
         transform.position = nmAgent.nextPosition;
     }
 
-    // ── NavMesh safety ────────────────────────────────────────────────────────
 
     private void SnapToNavMesh()
     {
@@ -747,9 +756,9 @@ public class NavigationAgent : AbstractAgent
         }
         Debug.LogWarning($"[{name}] SnapToNavMesh: no surface within 10 units.");
     }
+    #endregion
 
-    // ── Elevator ──────────────────────────────────────────────────────────────
-
+    #region Elevator
     private void StartElevatorJourney(GameObject destinationRoom, int destFloor,
                                        ElevatorCallStation station)
     {
@@ -798,16 +807,20 @@ public class NavigationAgent : AbstractAgent
         transform.position = slotPosition;
         nmAgent.nextPosition = slotPosition;
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    void SetNMAgentProperties()
+    private ElevatorCallStation GetBestStationForFloor(int floor)
     {
-        nmAgent.updatePosition = false;
-        nmAgent.velocity = Vector3.zero;
-        nmAgent.acceleration = 999f;
+        ElevatorCallStation best = null;
+        int bestLoad = int.MaxValue;
+        foreach (var s in _callStations)
+        {
+            if (s.floorIndex != floor) continue;
+            if (!s.IsElevatorViable()) continue;
+            int load = s.WaitingCount + s.elevatorController.RiderCount;
+            if (load < bestLoad) { bestLoad = load; best = s; }
+        }
+        if (best != null && bestLoad >= nCont.maxElevatorLoadBeforeStairs) return null;
+        return best;
     }
-
     private int GetFloorOfRoom(GameObject room)
     {
         if (room == null) return -1;
@@ -824,19 +837,12 @@ public class NavigationAgent : AbstractAgent
                   $"stationY={bestStation?.transform.position.y:F2}, floorIndex={best}, dist={bestDist:F2}");
         return best;
     }
+    #endregion
 
-    private ElevatorCallStation GetBestStationForFloor(int floor)
-    {
-        ElevatorCallStation best = null;
-        int bestLoad = int.MaxValue;
-        foreach (var s in _callStations)
-        {
-            if (s.floorIndex != floor) continue;
-            if (!s.IsElevatorViable()) continue;
-            int load = s.WaitingCount + s.elevatorController.RiderCount;
-            if (load < bestLoad) { bestLoad = load; best = s; }
-        }
-        if (best != null && bestLoad >= nCont.maxElevatorLoadBeforeStairs) return null;
-        return best;
-    }
+
+
+
+
+
+
 }
