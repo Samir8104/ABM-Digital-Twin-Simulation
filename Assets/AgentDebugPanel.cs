@@ -1,6 +1,7 @@
-using UnityEngine;
-using TMPro;
+using System.Collections.Generic;
 using System.Text;
+using TMPro;
+using UnityEngine;
 
 public class AgentDebugPanel : MonoBehaviour
 {
@@ -14,6 +15,8 @@ public class AgentDebugPanel : MonoBehaviour
     [Tooltip("How often (seconds) to refresh the panel while an agent is selected.")]
     public float refreshInterval = 0.25f;
 
+    private TimeManager _time;
+
 
 
     private NavigationAgent _currentAgent;
@@ -22,6 +25,7 @@ public class AgentDebugPanel : MonoBehaviour
     void Awake()
     {
         if (panelRoot != null) panelRoot.SetActive(false);
+        _time = FindObjectOfType<TimeManager>();
     }
 
     void Update()
@@ -66,31 +70,67 @@ public class AgentDebugPanel : MonoBehaviour
 
         activityText.text = $"Activity: {schedule.CurrentActivity}";
 
-        var sb = new StringBuilder();
-        sb.AppendLine("Schedule:");
-
         var active = schedule.ActiveClass;
+        var today = _time != null ? _time.GetCurrentDayOfWeek() : TimeManager.DayOfWeek.Monday;
 
+        var entries = new List<(AgentSchedule.ClassEntry entry, int rank)>();
         for (int i = 0; i < schedule.ClassCount; i++)
         {
             var entry = schedule.GetClassAt(i);
-            bool isActive = active.HasValue && active.Value.Section == entry.Section;
+            entries.Add((entry, MinDayRank(entry.Section, today)));
+        }
 
+        // Today's classes first (by time), then next day's classes, etc.
+        entries.Sort((a, b) =>
+        {
+            int rankCompare = a.rank.CompareTo(b.rank);
+            return rankCompare != 0 ? rankCompare : a.entry.Section.startMinute.CompareTo(b.entry.Section.startMinute);
+        });
+
+        var sb = new StringBuilder();
+        sb.AppendLine("Schedule:");
+
+        foreach (var (entry, _) in entries)
+        {
+            bool isActive = active.HasValue && active.Value.Section == entry.Section;
             string startStr = MinutesToTimeString(entry.Section.startMinute);
             string endStr = MinutesToTimeString(entry.Section.endMinute);
-            string room = entry.Section.roomNumber;
+            string days = GetMeetingDaysString(entry.Section);
 
-            string line = $"  {startStr} - {endStr}  Room {room}";
+            string line = $"  {startStr} - {endStr}  Room {entry.Section.roomNumber}  [{days}]";
             if (isActive) line = $"<b><color=#FFD24A>{line}  ? ACTIVE</color></b>";
 
             sb.AppendLine(line);
         }
 
-
         scheduleText.text = sb.ToString();
     }
 
- 
+    // 0 = meets today, 1 = next day this week the class occurs, etc.
+    private static int MinDayRank(CourseSection section, TimeManager.DayOfWeek today)
+    {
+        int best = int.MaxValue;
+        foreach (TimeManager.DayOfWeek day in System.Enum.GetValues(typeof(TimeManager.DayOfWeek)))
+        {
+            if (!section.MeetsOnDay(day)) continue;
+            int rank = ((int)day - (int)today + 5) % 5;
+            if (rank < best) best = rank;
+        }
+        return best == int.MaxValue ? 5 : best;
+    }
+    private static string GetMeetingDaysString(CourseSection section)
+    {
+        var sb = new StringBuilder();
+        foreach (TimeManager.DayOfWeek day in System.Enum.GetValues(typeof(TimeManager.DayOfWeek)))
+        {
+            if (section.MeetsOnDay(day))
+            {
+                if (sb.Length > 0) sb.Append(", ");
+                sb.Append(day.ToString().Substring(0, 3)); // Monday ? Mon, etc.
+            }
+        }
+        return sb.ToString();
+    }
     private static string MinutesToTimeString(int totalMinutes)
     {
         int h = (totalMinutes / 60) % 24;

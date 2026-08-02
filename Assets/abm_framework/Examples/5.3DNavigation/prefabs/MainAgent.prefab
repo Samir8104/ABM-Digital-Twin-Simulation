@@ -498,6 +498,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   targetRoom: {fileID: 0}
   isNearTarget: 0
+  bathroomChanceDefault: 0.1
+  bathroomChanceIncrement: 0.05
   animator: {fileID: 8482594623663531169}
 --- !u!65 &4871350343277469903
 BoxCollider:

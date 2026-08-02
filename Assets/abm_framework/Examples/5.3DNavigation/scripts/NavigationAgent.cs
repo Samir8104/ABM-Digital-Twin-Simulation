@@ -35,11 +35,10 @@ public class NavigationAgent : AbstractAgent
     private bool _classEndHandled = false;
 
     // ── Bathroom urge ─────────────────────────────────────────────────────────
-    private int _bathroomUrgeSteps = 0;
-    private bool _bathroomUrgeActive = false;
-    private bool _bathroomNeedPending = false;
-    private bool usedBathroomRecently = false;
-
+    [Header("Bathroom Behavior")]
+    [SerializeField] private float bathroomChanceDefault = 0.10f;
+    [SerializeField] private float bathroomChanceIncrement = 0.08f;
+    private float _bathroomChance;
     int _stayEndMinute = -1;
     // ── Stepper liveness tracking ─────────────────────────────────────────────
     private bool _stepperAlive_DeferredInit = false;
@@ -47,7 +46,7 @@ public class NavigationAgent : AbstractAgent
     private bool _stepperAlive_CheckDist = false;
     private bool _stepperAlive_Move = false;
     private bool _stepperAlive_StayInPlace = false;
-    private bool _stepperAlive_BathroomUrge = false;
+
 
     public event System.Action<NavigationAgent> OnFinishedForDay;
 
@@ -122,6 +121,7 @@ public class NavigationAgent : AbstractAgent
         nmAgent = GetComponent<NavMeshAgent>();
         _time = FindObjectOfType<TimeManager>();
         _callStations = FindObjectsOfType<ElevatorCallStation>();
+        _bathroomChance = bathroomChanceDefault;
         if (animator != null)
         {
             animator.SetBool("isIdle", true);
@@ -142,10 +142,9 @@ public class NavigationAgent : AbstractAgent
         _schedule.SetActiveClass(classEntry);
         _schedule.SetActivity(AgentActivity.GoingToClass);
         _classEndHandled = false;
-        _bathroomNeedPending = false;
+
 
         NavigateTo(classEntry.ClassroomNode);
-        ResetBathroomUrge();
     }
 
     // Creates stepper functions for the ABMU script. Steppers run every frame on a step interval.
@@ -168,9 +167,6 @@ public class NavigationAgent : AbstractAgent
             case "StayInPlace":
                 if (_stepperAlive_StayInPlace) return;
                 _stepperAlive_StayInPlace = true; break;
-            case "BathroomUrge":
-                if (_stepperAlive_BathroomUrge) return;
-                _stepperAlive_BathroomUrge = true; break;
         }
         _pendingRegistration.Add(stepperName);
         CreateStepper(method, step, priority);
@@ -194,7 +190,7 @@ public class NavigationAgent : AbstractAgent
                 case "CheckDistToTarget": _stepperAlive_CheckDist = false; break;
                 case "Move": _stepperAlive_Move = false; break;
                 case "StayInPlace": _stepperAlive_StayInPlace = false; break;
-                case "BathroomUrge": _stepperAlive_BathroomUrge = false; break;
+
             }
             return;
         }
@@ -216,9 +212,6 @@ public class NavigationAgent : AbstractAgent
             case "StayInPlace":
                 if (!_stepperAlive_StayInPlace) return;
                 _stepperAlive_StayInPlace = false; break;
-            case "BathroomUrge":
-                if (!_stepperAlive_BathroomUrge) return;
-                _stepperAlive_BathroomUrge = false; break;
             default: return;
         }
         DestroyStepper(stepperName);
@@ -255,14 +248,13 @@ public class NavigationAgent : AbstractAgent
                 break;
 
             case AgentActivity.Idle:
-                var toHead = _schedule.FindClassToHeadTo(simMinute, DepartureWindowMinutes);
+                var toHead = _schedule.FindClassToHeadTo(simMinute, DepartureWindowMinutes, _time.GetCurrentDayOfWeek());
                 if (toHead.HasValue)
                 {
                     _schedule.SetActiveClass(toHead.Value);
                     _schedule.SetActivity(AgentActivity.GoingToClass);
                     _classEndHandled = false;
                     NavigateTo(toHead.Value.ClassroomNode);
-                    ResetBathroomUrge();
                 }
                 break;
 
@@ -283,62 +275,18 @@ public class NavigationAgent : AbstractAgent
 
     // ── Post-class decision ───────────────────────────────────────────────────
 
-    void PostClassDecision()
-    {
-        int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
-        int gapMinutes = _schedule.MinutesUntilNextClass(simMinute);
-
-        float stayChance;
-        if (gapMinutes <= 60) stayChance = 0.65f;
-        else if (gapMinutes <= 120) stayChance = 0.25f;
-        else stayChance = 0.10f;
-
-        if (Random.value < stayChance)
-        {
-            float roll = Random.value;
-
-            if (_bathroomNeedPending || roll < 0.30f)
-            {
-                _bathroomNeedPending = false;
-                GoToBathroom();
-            }
-            else if (roll < 0.40f) 
-            {
-                GoToOfficeHours();
-            }
-            else
-            {
-                GoStudy();
-            }
-        }
-        else
-        {
-            LeaveBuilding();
-        }
-    }
-
-    // ── After bathroom / study finishes ──────────────────────────────────────
-
-
-    IEnumerator ResetBathroomBool()
-    {
-        yield return new WaitForSeconds(60);
-        usedBathroomRecently = false;
-    }
-
     void AfterActivityDecision()
     {
         int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
+        var today = _time.GetCurrentDayOfWeek();
 
-        var nextClass = _schedule.NextClass;
-        if (nextClass.HasValue && nextClass.Value.Section.MeetsOnDay(_time.GetCurrentDayOfWeek()))
+        var nextClass = _schedule.NextClassOnDay(today);
+        if (nextClass.HasValue)
         {
             int headOutAt = nextClass.Value.Section.startMinute - DepartureWindowMinutes;
 
             if (simMinute >= nextClass.Value.Section.endMinute)
             {
-                // Mark it attended anyway so scheduling logic doesn't loop on it,
-                // then re-run the decision against the class after this one.
                 _schedule.SetActiveClass(nextClass.Value);
                 AfterActivityDecision();
                 return;
@@ -354,37 +302,64 @@ public class NavigationAgent : AbstractAgent
             }
         }
 
+        if (Random.value < _bathroomChance)
+        {
+            GoToBathroom();
+            return;
+        }
+        IncrementBathroomChance();
 
-    int gapMinutes = _schedule.MinutesUntilNextClass(simMinute);
+        int gapMinutes = _schedule.MinutesUntilNextClassOnDay(simMinute, today);
+        RouteByGap(gapMinutes);
+    }
 
+    void PostClassDecision()
+    {
+        int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
+        int gapMinutes = _schedule.MinutesUntilNextClassOnDay(simMinute, _time.GetCurrentDayOfWeek());
+
+        if (Random.value < _bathroomChance)
+        {
+            GoToBathroom();
+            return;
+        }
+        IncrementBathroomChance();
+
+        RouteByGap(gapMinutes);
+    }
+    void RouteByGap(int gapMinutes)
+    {
         if (gapMinutes > 90)
         {
-            // Too long until next class — leave the building
-            LeaveBuilding();
+            // Plenty of time — mostly leave, sometimes study a bit first.
+            if (Random.value < 0.70f) LeaveBuilding();
+            else GoStudy();
         }
-        else if (_bathroomNeedPending)
+        else if (gapMinutes > 60)
         {
-            _bathroomNeedPending = false;
-            GoToBathroom();
+            // Roughly even split between studying, office hours, or leaving.
+            float roll = Random.value;
+            if (roll < 0.34f) GoStudy();
+            else if (roll < 0.67f) GoToOfficeHours();
+            else LeaveBuilding();
+        }
+        else if (gapMinutes > 30)
+        {
+            // Getting close — usually study, occasionally leave.
+            if (Random.value < 0.75f) GoStudy();
+            else LeaveBuilding();
         }
         else
         {
-            // Gap is short enough — stay put until class time
-            // Don't GoStudy() again — just wait in place
-            StartTimedStay(Mathf.Clamp(gapMinutes - DepartureWindowMinutes, 5, 60));
+            // Not enough time to go anywhere meaningful — just wait it out.
+            _schedule.SetActivity(AgentActivity.WaitingForClass);
+            StartTimedStay(Mathf.Clamp(gapMinutes - DepartureWindowMinutes, 5, 30));
         }
     }
     #endregion
 
     #region ActivityHelpers
-    void GoToBathroom()
-    {
-        GameObject node = nCont.GetClosestBathroomNode(transform.position);
-        if (node == null) { AfterActivityDecision(); return; }
-        _schedule.SetActivity(AgentActivity.GoingToBathroom);
-        ResetBathroomUrge();  
-        NavigateDirect(node);
-    }
+
 
     void GoToOfficeHours()
     {
@@ -467,7 +442,7 @@ public class NavigationAgent : AbstractAgent
 
         nmAgent.isStopped = false;
         _schedule.SetActivity(AgentActivity.Idle);
-        ResetBathroomUrge();
+
     }
     #endregion
 
@@ -490,7 +465,6 @@ public class NavigationAgent : AbstractAgent
 
         targetRoom = startRoom;
         _classEndHandled = false;
-        _bathroomNeedPending = false;
         _respawnAtMinute = -1;
 
         if (_renderers == null) _renderers = GetComponentsInChildren<Renderer>();
@@ -507,7 +481,6 @@ public class NavigationAgent : AbstractAgent
         // no-op if it's already alive, so this is safe to call every time.
         SafeCreateStepper("ScheduleTick", ScheduleTick, 30, 1);
 
-        ResetBathroomUrge();
     }
     #endregion
 
@@ -519,23 +492,13 @@ public class NavigationAgent : AbstractAgent
         SafeDestroyStepper("StayInPlace");
         int nowMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
         _stayEndMinute = nowMinute + simMinutes;
-        // so this prints a lot
-        if (usedBathroomRecently == false) // if statement to prevent it from looping
-        {
-            usedBathroomRecently = true;
-            Debug.Log($"[{name}] StartTimedStay called: nowMinute={nowMinute}, " +
-             $"duration={simMinutes}, newEnd={_stayEndMinute}, " +
-             $"activity={_schedule.CurrentActivity}\n{System.Environment.StackTrace}");
-
-            SafeCreateStepper("StayInPlace", StayInPlace, 2, 1);
-        }
-        
+        SafeCreateStepper("StayInPlace", StayInPlace, 2, 1);
     }
 
     void StayInPlace()
     {
         _pendingRegistration.Remove("StayInPlace");
-        int nowMinute = _time.CurrentHour * 60 +_time.CurrentMinute;
+        int nowMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
         if (nowMinute <= _stayEndMinute) return;
         SafeDestroyStepper("StayInPlace");
         switch (_schedule.CurrentActivity)
@@ -544,12 +507,9 @@ public class NavigationAgent : AbstractAgent
                 PostClassDecision();
                 break;
             case AgentActivity.InBathroom:
-                AfterActivityDecision();
-                break;
             case AgentActivity.InStudying:
-                AfterActivityDecision();
-                break;
             case AgentActivity.InOfficeHours:
+            case AgentActivity.WaitingForClass:
                 AfterActivityDecision();
                 break;
             default:
@@ -557,54 +517,25 @@ public class NavigationAgent : AbstractAgent
                 break;
         }
     }
-    #endregion
+        #endregion
 
     #region Bathroom
-    private const int BATHROOM_URGE_MIN = 180;
-    private const int BATHROOM_URGE_MAX = 360;
-
-    void ResetBathroomUrge()
+        void GoToBathroom()
     {
-        SafeDestroyStepper("BathroomUrge");
-        _bathroomUrgeSteps = Random.Range(BATHROOM_URGE_MIN, BATHROOM_URGE_MAX + 1);
-        _bathroomUrgeActive = true;
-        SafeCreateStepper("BathroomUrge", BathroomUrgeTick, 60, 50);
+        Debug.Log($"[{name}] GoToBathroom() called.\n{System.Environment.StackTrace}");
+        GameObject node = nCont.GetClosestBathroomNode(transform.position);
+        if (node == null) { AfterActivityDecision(); return; }
+        _schedule.SetActivity(AgentActivity.GoingToBathroom);
+        _bathroomChance = bathroomChanceDefault; // reset now that they're going
+        NavigateDirect(node);
     }
 
-    void BathroomUrgeTick()
+    // Called at every decision point the agent DIDN'T go to the bathroom,
+    // so the chance climbs the longer they hold off.
+    void IncrementBathroomChance()
     {
-        _pendingRegistration.Remove("BathroomUrge");
-        if (!_bathroomUrgeActive) return;
-        _bathroomUrgeSteps--;
-        if (_bathroomUrgeSteps > 0) return;
-
-        _bathroomUrgeActive = false;
-        SafeDestroyStepper("BathroomUrge");
-
-        var act = _schedule.CurrentActivity;
-
-        // Already there or already heading there — nothing to flag.
-        if (act == AgentActivity.InBathroom || act == AgentActivity.GoingToBathroom)
-        {
-            ResetBathroomUrge();
-            return;
-        }
-
-        bool canGoNow = act == AgentActivity.InStudying ||
-                        act == AgentActivity.Wandering ||
-                        act == AgentActivity.Idle;
-
-        if (canGoNow)
-        {
-            SafeDestroyStepper("StayInPlace");
-            GoToBathroom();
-        }
-        else
-        {
-            _bathroomNeedPending = true;
-        }
-
-        ResetBathroomUrge();
+        _bathroomChance = Mathf.Clamp01(_bathroomChance + bathroomChanceIncrement);
+        Debug.Log($"[{name}] bathroom chance incremented to {_bathroomChance:F2}");
     }
     #endregion Bathroom
 
@@ -658,14 +589,11 @@ public class NavigationAgent : AbstractAgent
 
             case AgentActivity.GoingToBathroom:
                 _schedule.SetActivity(AgentActivity.InBathroom);
-                if (usedBathroomRecently == false) // prevents the agent from using the bathroom too often, causing unrealistic behaviour. 
-                {
-                    ResetBathroomBool();
-                    int randomTime = Random.Range(2, 6);
-                    Debug.Log($"[{name}] is staying in the bathroom for " + randomTime + " minutes"); // this only fires once, so that means the problem is in startTimedstay
-                    StartTimedStay(randomTime);
+                int randomTime = Random.Range(2, 6);
+                Debug.Log($"[{name}] is staying in the bathroom for " + randomTime + " minutes"); // this only fires once, so that means the problem is in startTimedstay
+                StartTimedStay(randomTime);
 
-                }
+                
                 break;
 
             case AgentActivity.GoingToStudying:

@@ -3,20 +3,10 @@ using UnityEngine;
 
 public enum AgentActivity
 {
-    Idle,
-    OffCampus,          // Agent is inactive/invisible between classes
-    GoingToClass,
-    InClass,
-    Wandering,
-    GoingToBathroom,
-    InBathroom,
-    GoingToOfficeHours,
-    InOfficeHours,
-    Chatting,
-    GoingToStudying,
-    InStudying,
-    GoingToExit,
-    Done
+    Idle, OffCampus, GoingToClass, InClass, Wandering,
+    GoingToBathroom, InBathroom, GoingToOfficeHours, InOfficeHours,
+    Chatting, GoingToStudying, InStudying, GoingToExit,
+    WaitingForClass, Done
 }
 
 /// <summary>
@@ -75,6 +65,28 @@ public class AgentSchedule
     /// <summary>Convenience: start minute for the current active class.</summary>
     public int StartMinute => ActiveClass?.Section.startMinute ?? 0;
 
+    /// <summary>
+    /// Returns the next class after the active one that actually meets on the
+    /// given day — skips list entries for other days regardless of where they
+    /// fall in the time-sorted list. Null if none remain for that day.
+    /// </summary>
+    public ClassEntry? NextClassOnDay(TimeManager.DayOfWeek day)
+    {
+        for (int i = _activeClassIndex + 1; i < _classes.Count; i++)
+        {
+            if (_classes[i].Section.MeetsOnDay(day))
+                return _classes[i];
+        }
+        return null;
+    }
+
+    public int MinutesUntilNextClassOnDay(int simMinute, TimeManager.DayOfWeek day)
+    {
+        ClassEntry? next = NextClassOnDay(day);
+        if (!next.HasValue) return int.MaxValue;
+        return Mathf.Max(0, next.Value.Section.startMinute - simMinute);
+    }
+
     /// <summary>Convenience: end minute for the current active class.</summary>
     public int EndMinute => ActiveClass?.Section.endMinute ?? 0;
 
@@ -100,18 +112,20 @@ public class AgentSchedule
         return null;
     }
 
+
+
+
     /// <summary>
     /// Returns the first class that is about to start (within the departure
     /// window) and that the agent hasn't already been assigned as active.
     /// </summary>
-    public ClassEntry? FindClassToHeadTo(int simMinute, int departureWindowMinutes)
+    public ClassEntry? FindClassToHeadTo(int simMinute, int departureWindowMinutes, TimeManager.DayOfWeek day)
     {
         for (int i = 0; i < _classes.Count; i++)
         {
             var c = _classes[i];
-            // Skip classes the agent has already attended or is currently attending.
             if (i <= _activeClassIndex) continue;
-            if (!ClassMeetsToday(c)) continue;
+            if (!c.Section.MeetsOnDay(day)) continue;
             int headOutAt = c.Section.startMinute - departureWindowMinutes;
             if (simMinute >= headOutAt && simMinute < c.Section.endMinute)
                 return c;
@@ -140,9 +154,8 @@ public class AgentSchedule
     private static bool ClassMeetsToday(ClassEntry c, TimeManager time) =>
         c.Section.MeetsOnDay(time.GetCurrentDayOfWeek());
 
-    // Overload that skips the TimeManager for internal use where we don't have it.
-    // Called from FindClassToHeadTo which is itself called with a day-check upstream.
-    private static bool ClassMeetsToday(ClassEntry c) => true; // Caller filters by day
+
+
 
     // ?? Activity state ????????????????????????????????????????????????????????
 
