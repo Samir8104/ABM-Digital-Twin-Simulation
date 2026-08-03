@@ -246,6 +246,7 @@ public class NavigationAgent : AbstractAgent
 
     void DeferredInit()
     {
+        if (!_stepperAlive_DeferredInit) return;
         _pendingRegistration.Remove("DeferredInit");
         if (nCont == null || _time == null || _schedule == null) return;
         if (_scheduleInitialized) { SafeDestroyStepper("DeferredInit"); return; }
@@ -259,7 +260,7 @@ public class NavigationAgent : AbstractAgent
     #region AgentDecisions
     void ScheduleTick()
     {
-        
+        if (!_stepperAlive_ScheduleTick) return;
         _pendingRegistration.Remove("ScheduleTick");
         if (_schedule == null || _time == null || nCont == null) return;
         if (_isRiding) return;
@@ -295,7 +296,7 @@ public class NavigationAgent : AbstractAgent
                 {
                     _classEndHandled = true;
                     _schedule.SetActivity(AgentActivity.Wandering);
-                    StartTimedStay(Random.Range(nCont.classExitLingerMin, nCont.classExitLingerMax + 1));
+                    PostClassDecision(); 
                 }
                 break;
 
@@ -528,6 +529,7 @@ public class NavigationAgent : AbstractAgent
 
     void StayInPlace()
     {
+        if (!_stepperAlive_StayInPlace) return;
         _pendingRegistration.Remove("StayInPlace");
         int nowMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
         if (nowMinute <= _stayEndMinute) return;
@@ -592,6 +594,7 @@ public class NavigationAgent : AbstractAgent
     }
     void CheckDistToTarget()
     {
+        if (!_stepperAlive_CheckDist) return;
         _pendingRegistration.Remove("CheckDistToTarget");
         float d = Vector3.Distance(transform.position, target);
         if (d >= nCont.distToTargetThreshold) { isNearTarget = false; return; }
