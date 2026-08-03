@@ -10,6 +10,8 @@ public class NavigationAgent : AbstractAgent
     NavigationController nCont;
     NavMeshAgent nmAgent;
     TimeManager _time;
+    [SerializeField] private SkinnedMeshRenderer meshRenderer;
+    [SerializeField] private ParticleSystem mouth;
 
     // ── Navigation state ──────────────────────────────────────────────────────
     Vector3 target;
@@ -60,6 +62,11 @@ public class NavigationAgent : AbstractAgent
     private int _respawnAtMinute = -1;
     private Renderer[] _renderers;
     private Collider[] _colliders;
+
+    // ── Sim-speed-scaled movement ─────────────────────────────────────────────
+    private float _baseSpeed = -1f;
+    private bool _subscribedToSimSpeed = false;
+
     #endregion
 
     #region Initilizations
@@ -78,10 +85,12 @@ public class NavigationAgent : AbstractAgent
         animator.SetBool("stopWalking", false);
         animator.SetBool("startWalking", true);
 
+
         yield return new WaitForSeconds(1); 
 
         animator.SetBool("startWalking", false);
         animator.SetBool("Walking", true);
+
     }
 
     IEnumerator BeginIdleRoutine()
@@ -94,6 +103,7 @@ public class NavigationAgent : AbstractAgent
 
         animator.SetBool("stopWalking", false);
         animator.SetBool("isIdle", true);
+
     }
 
     //Sets the schedule for the agent
@@ -113,7 +123,7 @@ public class NavigationAgent : AbstractAgent
 
     public void Init(GameObject startRoom)
     {
-        if (_fullyInitialized) return;   
+        if (_fullyInitialized) return;
         _fullyInitialized = true;
 
         base.Init();
@@ -121,7 +131,6 @@ public class NavigationAgent : AbstractAgent
         nmAgent = GetComponent<NavMeshAgent>();
         _time = FindObjectOfType<TimeManager>();
         _callStations = FindObjectsOfType<ElevatorCallStation>();
-        _bathroomChance = bathroomChanceDefault;
         if (animator != null)
         {
             animator.SetBool("isIdle", true);
@@ -130,8 +139,25 @@ public class NavigationAgent : AbstractAgent
 
         SetNMAgentProperties();
         targetRoom = startRoom;
+
+        if (_baseSpeed < 0f) _baseSpeed = nmAgent.speed; // capture prefab's authored speed once
+
+        if (!_subscribedToSimSpeed && _time != null)
+        {
+            _subscribedToSimSpeed = true;
+            _time.OnSimSpeedChanged += HandleSimSpeedChanged;
+            HandleSimSpeedChanged(_time.GetAgentSpeedMultiplier()); // apply current speed immediately
+        }
+
         SafeCreateStepper("DeferredInit", DeferredInit, 1, 1);
     }
+
+    private void HandleSimSpeedChanged(float multiplier)
+    {
+        if (nmAgent != null && _baseSpeed > 0f)
+            nmAgent.speed = _baseSpeed * multiplier;
+    }
+
     // This is SUPPOSED to wake the agent up for class, but its never called
     // I'll make sure to use the function later for when we are simulating multiple days
     public void WakeUpForClass(AgentSchedule.ClassEntry classEntry, Vector3 spawnPosition)
@@ -249,12 +275,18 @@ public class NavigationAgent : AbstractAgent
 
             case AgentActivity.Idle:
                 var toHead = _schedule.FindClassToHeadTo(simMinute, DepartureWindowMinutes, _time.GetCurrentDayOfWeek());
+                meshRenderer.enabled = false;
+                var emission = mouth.emission;
+                emission.enabled = false;
                 if (toHead.HasValue)
                 {
+                    meshRenderer.enabled = true;
+                    emission.enabled = true;
                     _schedule.SetActiveClass(toHead.Value);
                     _schedule.SetActivity(AgentActivity.GoingToClass);
                     _classEndHandled = false;
                     NavigateTo(toHead.Value.ClassroomNode);
+
                 }
                 break;
 
@@ -380,18 +412,13 @@ public class NavigationAgent : AbstractAgent
     private bool _pendingLeaveIsExit = false;
     void LeaveBuilding()
     {
-        int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
-        var nextClass = _schedule.NextClass;
+        var today = _time.GetCurrentDayOfWeek();
+        var nextClass = _schedule.NextClassOnDay(today);
 
         GameObject exitNode = nCont.GetRandomExitNode();
         if (exitNode == null) { DeactivateAgent(hasMoreClasses: false); return; }
 
-        // Decide respawn timing before leaving. If there's another class today,
-        // come back 15 min before it starts; otherwise this agent is done for the day.
-        if (nextClass.HasValue && nextClass.Value.Section.MeetsOnDay(_time.GetCurrentDayOfWeek()))
-            _respawnAtMinute = nextClass.Value.Section.startMinute - 15;
-        else
-            _respawnAtMinute = -1;
+        _respawnAtMinute = nextClass.HasValue ? nextClass.Value.Section.startMinute - 15 : -1;
 
         _schedule.SetActivity(AgentActivity.GoingToExit);
         _pendingLeaveIsExit = true;
@@ -410,8 +437,7 @@ public class NavigationAgent : AbstractAgent
 
         _schedule.SetActivity(AgentActivity.OffCampus);
 
-        if (_renderers == null) _renderers = GetComponentsInChildren<Renderer>();
-        if (_colliders == null) _colliders = GetComponentsInChildren<Collider>();
+
         foreach (var r in _renderers) r.enabled = false;
         foreach (var c in _colliders) c.enabled = false;
 
@@ -443,6 +469,11 @@ public class NavigationAgent : AbstractAgent
         nmAgent.isStopped = false;
         _schedule.SetActivity(AgentActivity.Idle);
 
+    }
+
+    private void OnDestroy()
+    {
+        if (_time != null) _time.OnSimSpeedChanged -= HandleSimSpeedChanged;
     }
     #endregion
 
@@ -606,8 +637,7 @@ public class NavigationAgent : AbstractAgent
                 break;
 
             case AgentActivity.GoingToExit:
-                bool hasMore = _schedule.NextClass.HasValue &&
-               _schedule.NextClass.Value.Section.MeetsOnDay(_time.GetCurrentDayOfWeek());
+                bool hasMore = _schedule.NextClassOnDay(_time.GetCurrentDayOfWeek()).HasValue;
                 DeactivateAgent(hasMoreClasses: hasMore);
                 break;
             case AgentActivity.GoingToOfficeHours:
