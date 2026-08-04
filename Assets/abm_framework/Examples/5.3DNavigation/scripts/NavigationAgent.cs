@@ -290,6 +290,14 @@ public class NavigationAgent : AbstractAgent
 
                 }
                 break;
+            case AgentActivity.InClass:
+                if (simMinute >= _schedule.EndMinute && !_classEndHandled)
+                {
+                    _classEndHandled = true;
+                    _schedule.SetActivity(AgentActivity.Wandering);
+                    StartCoroutine(DepartureDelayRoutine(Random.Range(0f, 8f)));
+                }
+                break;
 
             case AgentActivity.Done:
                 SafeDestroyStepper("ScheduleTick");
@@ -297,6 +305,11 @@ public class NavigationAgent : AbstractAgent
         }
     }
 
+    IEnumerator DepartureDelayRoutine(float delaySeconds)
+    {
+        yield return new WaitForSeconds(delaySeconds);
+        PostClassDecision();
+    }
     // ── Post-class decision ───────────────────────────────────────────────────
 
     void AfterActivityDecision()
@@ -339,6 +352,7 @@ public class NavigationAgent : AbstractAgent
 
     void PostClassDecision()
     {
+        Debug.Log($"[{name}] [TIMING] PostClassDecision start at real-t={Time.realtimeSinceStartup:F2}");
         int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
         int gapMinutes = _schedule.MinutesUntilNextClassOnDay(simMinute, _time.GetCurrentDayOfWeek());
 
@@ -397,6 +411,7 @@ public class NavigationAgent : AbstractAgent
     {
         GameObject node = nCont.GetRandomStudyingNode();
         if (node == null) { LeaveBuilding(); return; }
+        Debug.Log($"[{name}] [TIMING] GoStudy → {node.name} at real-t={Time.realtimeSinceStartup:F2}");
         _schedule.SetActivity(AgentActivity.GoingToStudying);
         NavigateDirect(node);
     }
@@ -411,6 +426,7 @@ public class NavigationAgent : AbstractAgent
 
         _respawnAtMinute = nextClass.HasValue ? nextClass.Value.Section.startMinute - 15 : -1;
 
+        Debug.Log($"[{name}] [TIMING] LeaveBuilding → {exitNode.name} at real-t={Time.realtimeSinceStartup:F2}");
         _schedule.SetActivity(AgentActivity.GoingToExit);
         _pendingLeaveIsExit = true;
         NavigateDirect(exitNode);
@@ -590,6 +606,7 @@ public class NavigationAgent : AbstractAgent
         _pendingRegistration.Remove("CheckDistToTarget");
         float d = Vector3.Distance(transform.position, target);
         if (d >= nCont.distToTargetThreshold) { isNearTarget = false; return; }
+        Debug.Log($"[{name}] [TIMING] CheckDistToTarget arrived at real-t={Time.realtimeSinceStartup:F2}, dist={d:F2}");
 
         isNearTarget = true;
         nmAgent.isStopped = true;
@@ -669,23 +686,36 @@ public class NavigationAgent : AbstractAgent
 
     public void SetTarget(GameObject room)
     {
+        _moveLogCount = 0;
         SnapToNavMesh();
-
         targetRoom = room;
         target = nCont.GetRandomPointInRoom(room);
 
+        int nearbyAgents = 0;
+        foreach (var other in FindObjectsOfType<NavigationAgent>())
+        {
+            if (other != this && Vector3.Distance(other.transform.position, transform.position) < 5f)
+                nearbyAgents++;
+        }
+        Debug.Log($"[{name}] [TIMING] SetTarget → {room.name}, nearbyAgents(<5m)={nearbyAgents} at real-t={Time.realtimeSinceStartup:F2}");
+
+        _moveLogCount = 0;
         SafeDestroyStepper("CheckDistToTarget");
         SafeDestroyStepper("Move");
 
         nmAgent.isStopped = false;
         nmAgent.SetDestination(target);
-        SetMovingAnimState(true);   
+        SetMovingAnimState(true);
         SafeCreateStepper("CheckDistToTarget", CheckDistToTarget, 2, 100);
         SafeCreateStepper("Move", Move, 1, 105);
+   
     }
     #endregion
 
     #region Movement
+
+    private bool _loggedFirstMove = false;
+    private int _moveLogCount = 0;
     void Move()
     {
         _pendingRegistration.Remove("Move");
