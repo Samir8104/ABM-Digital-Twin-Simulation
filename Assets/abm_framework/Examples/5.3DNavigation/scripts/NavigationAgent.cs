@@ -291,15 +291,6 @@ public class NavigationAgent : AbstractAgent
                 }
                 break;
 
-            case AgentActivity.InClass:
-                if (simMinute >= _schedule.EndMinute && !_classEndHandled)
-                {
-                    _classEndHandled = true;
-                    _schedule.SetActivity(AgentActivity.Wandering);
-                    PostClassDecision(); 
-                }
-                break;
-
             case AgentActivity.Done:
                 SafeDestroyStepper("ScheduleTick");
                 break;
@@ -357,7 +348,7 @@ public class NavigationAgent : AbstractAgent
             return;
         }
         IncrementBathroomChance();
-
+       // this function runs once, so def not the issue :(
         RouteByGap(gapMinutes);
     }
     void RouteByGap(int gapMinutes)
@@ -384,9 +375,8 @@ public class NavigationAgent : AbstractAgent
         }
         else
         {
-            // Not enough time to go anywhere meaningful — just wait it out.
-            _schedule.SetActivity(AgentActivity.WaitingForClass);
-            StartTimedStay(Mathf.Clamp(gapMinutes - DepartureWindowMinutes, 5, 30));
+      
+            GoStudy();
         }
     }
     #endregion
@@ -536,6 +526,7 @@ public class NavigationAgent : AbstractAgent
         SafeDestroyStepper("StayInPlace");
         switch (_schedule.CurrentActivity)
         {
+            case AgentActivity.InClass:
             case AgentActivity.Wandering:
                 PostClassDecision();
                 break;
@@ -549,6 +540,7 @@ public class NavigationAgent : AbstractAgent
                 AfterActivityDecision();
                 break;
         }
+
     }
         #endregion
 
@@ -619,6 +611,8 @@ public class NavigationAgent : AbstractAgent
         {
             case AgentActivity.GoingToClass:
                 _schedule.SetActivity(AgentActivity.InClass);
+                int minutesLeftInClass = Mathf.Max(1, _schedule.EndMinute - (_time.CurrentHour * 60 + _time.CurrentMinute));
+                StartTimedStay(minutesLeftInClass);
                 break;
 
             case AgentActivity.GoingToBathroom:
