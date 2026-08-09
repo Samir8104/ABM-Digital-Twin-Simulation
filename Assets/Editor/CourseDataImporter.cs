@@ -42,20 +42,23 @@ public static class CourseDataImporter
 
         asset.sections.Clear();
 
-        string[] lines = File.ReadAllLines(csvPath);
+        // Parse the WHOLE file as CSV records, not as text lines.
+        // File.ReadAllLines() breaks on every \n, including ones that are
+        // inside a quoted field — this was fragmenting rows whenever a
+        // field (title/notes) contained an embedded line break, producing
+        // rows with too few columns.
+        var rows = ParseCsv(File.ReadAllText(csvPath));
         int imported = 0, skipped = 0;
 
-        // Skip header row (line 0)
-        for (int i = 1; i < lines.Length; i++)
+        // Skip header row (row 0)
+        for (int i = 1; i < rows.Count; i++)
         {
-            string line = lines[i].Trim();
-            if (string.IsNullOrWhiteSpace(line)) continue;
-
-            string[] cols = SplitCsvLine(line);
+            string[] cols = rows[i];
+            if (cols.Length == 1 && string.IsNullOrWhiteSpace(cols[0])) continue; // blank row
 
             if (cols.Length <= ColEnrolled)
             {
-                Debug.LogWarning($"[CourseDataImporter] Row {i} SKIPPED (too few columns: {cols.Length}). Raw: {line}");
+                Debug.LogWarning($"[CourseDataImporter] Row {i} SKIPPED (too few columns: {cols.Length}). Raw: {string.Join("|", cols)}");
                 skipped++;
                 continue;
             }
@@ -63,14 +66,14 @@ public static class CourseDataImporter
             string room = cols[ColRoom].Trim();
             if (string.IsNullOrEmpty(room))
             {
-                Debug.LogWarning($"[CourseDataImporter] Row {i} SKIPPED (empty room). Raw: {line}");
+                Debug.LogWarning($"[CourseDataImporter] Row {i} SKIPPED (empty room). Raw: {string.Join("|", cols)}");
                 skipped++; continue;
             }
 
             string enrolledStr = cols[ColEnrolled].Trim();
             if (!int.TryParse(enrolledStr, out int enrolled) || enrolled <= 0)
             {
-                Debug.LogWarning($"[CourseDataImporter] Row {i} SKIPPED (bad enrolled '{enrolledStr}'). Room={room}. Raw: {line}");
+                Debug.LogWarning($"[CourseDataImporter] Row {i} SKIPPED (bad enrolled '{enrolledStr}'). Room={room}. Raw: {string.Join("|", cols)}");
                 skipped++; continue;
             }
 
@@ -78,14 +81,14 @@ public static class CourseDataImporter
             int endMin = ParseTime(cols[ColEnd].Trim());
             if (startMin < 0 || endMin < 0)
             {
-                Debug.LogWarning($"[CourseDataImporter] Row {i} SKIPPED (bad time. start='{cols[ColStart]}' end='{cols[ColEnd]}'). Room={room}. Raw: {line}");
+                Debug.LogWarning($"[CourseDataImporter] Row {i} SKIPPED (bad time. start='{cols[ColStart]}' end='{cols[ColEnd]}'). Room={room}. Raw: {string.Join("|", cols)}");
                 skipped++; continue;
             }
 
             CourseDays days = ParseDays(cols[ColDays].Trim());
             if (days == CourseDays.None)
             {
-                Debug.LogWarning($"[CourseDataImporter] Row {i} SKIPPED (unparseable days '{cols[ColDays]}'). Room={room}. Raw: {line}");
+                Debug.LogWarning($"[CourseDataImporter] Row {i} SKIPPED (unparseable days '{cols[ColDays]}'). Room={room}. Raw: {string.Join("|", cols)}");
                 skipped++; continue;
             }
 
@@ -157,7 +160,7 @@ public static class CourseDataImporter
         bool inQuote = false;
         var current = new System.Text.StringBuilder();
 
-        foreach (char c in line)
+        foreach (char c in line) // inspects every char from left -> right
         {
             if (c == '"') { inQuote = !inQuote; }
             else if (c == ',' && !inQuote) { fields.Add(current.ToString()); current.Clear(); }
@@ -165,6 +168,81 @@ public static class CourseDataImporter
         }
         fields.Add(current.ToString());
         return fields.ToArray();
+    }
+    /// <summary>
+    /// Parses an entire CSV file's text into rows of fields, correctly
+    /// treating quoted fields as opaque — including embedded commas AND
+    /// embedded newlines (\r\n or \n), and "" as an escaped literal quote.
+    /// This is what File.ReadAllLines() + per-line splitting cannot do.
+    /// </summary>
+    private static System.Collections.Generic.List<string[]> ParseCsv(string text)
+    {
+        var rows = new System.Collections.Generic.List<string[]>();
+        var fields = new System.Collections.Generic.List<string>();
+        var current = new System.Text.StringBuilder();
+        bool inQuote = false;
+
+        int i = 0;
+        while (i < text.Length)
+        {
+            char c = text[i];
+
+            if (inQuote)
+            {
+                if (c == '"')
+                {
+                    // Escaped quote ("") -> literal quote char
+                    if (i + 1 < text.Length && text[i + 1] == '"')
+                    {
+                        current.Append('"');
+                        i += 2;
+                        continue;
+                    }
+                    inQuote = false;
+                    i++;
+                    continue;
+                }
+                current.Append(c); // includes \r, \n, commas — all literal inside quotes
+                i++;
+                continue;
+            }
+
+            switch (c)
+            {
+                case '"':
+                    inQuote = true;
+                    i++;
+                    break;
+                case ',':
+                    fields.Add(current.ToString());
+                    current.Clear();
+                    i++;
+                    break;
+                case '\r':
+                    i++; // ignore, \n (or end) handles the row break
+                    break;
+                case '\n':
+                    fields.Add(current.ToString());
+                    current.Clear();
+                    rows.Add(fields.ToArray());
+                    fields.Clear();
+                    i++;
+                    break;
+                default:
+                    current.Append(c);
+                    i++;
+                    break;
+            }
+        }
+
+        // Final field/row if file doesn't end with a newline
+        if (current.Length > 0 || fields.Count > 0)
+        {
+            fields.Add(current.ToString());
+            rows.Add(fields.ToArray());
+        }
+
+        return rows;
     }
 }
 #endif

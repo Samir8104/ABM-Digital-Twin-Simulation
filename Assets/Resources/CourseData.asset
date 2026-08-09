@@ -228,6 +228,31 @@ MonoBehaviour:
     endMinute: 1200
     totalEnrolled: 40
     meetingDays: 1
+  - roomNumber: 116
+    startMinute: 480
+    endMinute: 530
+    totalEnrolled: 84
+    meetingDays: 21
+  - roomNumber: 116
+    startMinute: 510
+    endMinute: 585
+    totalEnrolled: 84
+    meetingDays: 10
+  - roomNumber: 116
+    startMinute: 675
+    endMinute: 725
+    totalEnrolled: 59
+    meetingDays: 21
+  - roomNumber: 117
+    startMinute: 740
+    endMinute: 790
+    totalEnrolled: 59
+    meetingDays: 21
+  - roomNumber: 116
+    startMinute: 600
+    endMinute: 675
+    totalEnrolled: 59
+    meetingDays: 10
   - roomNumber: 127
     startMinute: 960
     endMinute: 1035
@@ -748,6 +773,11 @@ MonoBehaviour:
     endMinute: 945
     totalEnrolled: 7
     meetingDays: 16
+  - roomNumber: 124
+    startMinute: 780
+    endMinute: 855
+    totalEnrolled: 125
+    meetingDays: 10
   - roomNumber: 123
     startMinute: 600
     endMinute: 675
