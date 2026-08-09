@@ -263,7 +263,7 @@ public class NavigationAgent : AbstractAgent
     {
         if (!_stepperAlive_ScheduleTick) return;
         _pendingRegistration.Remove("ScheduleTick");
-        if (_schedule == null || _time == null || nCont == null) return;
+        if (_schedule == null || _time == null || nCont == null || !_time.IsRunning) return;
         if (_isRiding) return;
 
         int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;

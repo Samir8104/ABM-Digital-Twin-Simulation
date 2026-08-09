@@ -1,4 +1,5 @@
 ﻿using ABMU.Core;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -15,14 +16,14 @@ public class ScheduleManager : MonoBehaviour
     [Header("Exits / Entrances")]
     public List<GameObject> exitNodes = new();
 
-    [Header("Cap (0 = unlimited concurrent agents)")]
+    [Header("Cap (set automatically from the menu's agent-count selection)")]
     public int maxTotalAgents = 0;
 
     [Header("Realism")]
     public int minClassesPerAgent = 1;
     public int maxClassesPerAgent = 4;
 
-    [Header("Rolling Spawn")]
+    [Header("Rolling Spawn (used for refill AFTER the initial load)")]
     [Tooltip("How many sim-minutes before a virtual student's first class they may be activated.")]
     public int activationLeadMinutes = 20;
     [Tooltip("Real seconds between pool-refill checks.")]
@@ -32,13 +33,15 @@ public class ScheduleManager : MonoBehaviour
     private readonly Dictionary<string, GameObject> _roomByNumber = new();
     private readonly List<NavigationAgent> _allAgents = new();
 
-    // Virtual students not yet spawned, sorted by first-class start time.
     private List<AgentSchedule> _pendingStudents = new();
     private int _pendingCursor = 0;
 
-    // Pool of agent GameObjects available for reuse.
     private readonly List<NavigationAgent> _agentPool = new();
     private readonly HashSet<NavigationAgent> _activeAgents = new();
+
+    /// <summary>True once virtual student schedules have finished building.</summary>
+    public bool IsScheduleBuilt { get; private set; } = false;
+    public int AvailableStudentCount => _pendingStudents.Count;
 
     private void Awake()
     {
@@ -55,7 +58,7 @@ public class ScheduleManager : MonoBehaviour
     {
         _time = FindObjectOfType<TimeManager>();
         IndexSceneRooms();
-        StartCoroutine(BuildAndSpawnCoroutine());
+        StartCoroutine(BuildScheduleCoroutine());
     }
 
     private void IndexSceneRooms()
@@ -70,14 +73,18 @@ public class ScheduleManager : MonoBehaviour
         Debug.Log($"[ScheduleManager] Indexed {_roomByNumber.Count} room nodes.");
     }
 
-    private IEnumerator BuildAndSpawnCoroutine()
+    /// <summary>
+    /// Builds the virtual-student roster from CourseData. Runs automatically
+    /// on scene start — this is cheap/instant and doesn't spawn anything, so
+    /// it doesn't need to wait for the menu.
+    /// </summary>
+    private IEnumerator BuildScheduleCoroutine()
     {
         yield return null;
 
         if (agentPrefab == null) { Debug.LogError("[ScheduleManager] agentPrefab is null!"); yield break; }
         if (spawnRoot == null) { Debug.LogError("[ScheduleManager] spawnRoot is null!"); yield break; }
 
-        // ── Step 1: flat slot list ──────────────────────────────────────────
         var slots = new List<(CourseSection section, GameObject classroomNode)>();
         foreach (var section in courseData.sections)
         {
@@ -96,21 +103,19 @@ public class ScheduleManager : MonoBehaviour
                       $"totalEnrolled={section.totalEnrolled} → added {added} slots.");
         }
         Debug.Log($"[ScheduleManager] TOTAL slots built: {slots.Count}");
-        // ── Step 2: shuffle ──────────────────────────────────────────────────
+
         for (int i = slots.Count - 1; i > 0; i--)
         {
-            int j = Random.Range(0, i + 1);
+            int j = UnityEngine.Random.Range(0, i + 1);
             (slots[i], slots[j]) = (slots[j], slots[i]);
         }
 
         var students = new List<List<(CourseSection, GameObject)>>();
-        int skippedForConflict = 0;
 
         foreach (var slot in slots)
         {
             bool assigned = false;
 
-            // Try existing students that still have room and no conflict.
             for (int i = 0; i < students.Count; i++)
             {
                 var existing = students[i];
@@ -134,25 +139,20 @@ public class ScheduleManager : MonoBehaviour
             }
 
             if (!assigned)
-            {
-                // Start a brand new virtual student for this slot.
                 students.Add(new List<(CourseSection, GameObject)> { slot });
-            }
         }
 
         foreach (var student in students)
         {
-            int target = Random.Range(minClassesPerAgent, maxClassesPerAgent + 1);
+            int target = UnityEngine.Random.Range(minClassesPerAgent, maxClassesPerAgent + 1);
             if (student.Count > target)
             {
-                // Keep a random subset of size `target`.
                 for (int i = student.Count - 1; i >= target; i--)
-                    student.RemoveAt(Random.Range(0, student.Count));
+                    student.RemoveAt(UnityEngine.Random.Range(0, student.Count));
             }
         }
         students.RemoveAll(s => s.Count == 0);
 
-        // Sort each student's own classes by start time, then build AgentSchedules.
         _pendingStudents = new List<AgentSchedule>(students.Count);
         foreach (var student in students)
         {
@@ -163,16 +163,42 @@ public class ScheduleManager : MonoBehaviour
             _pendingStudents.Add(schedule);
         }
 
-        // Sort the whole roster by first class start time so the rolling
-        // spawner pulls them in chronological order.
         _pendingStudents.Sort((a, b) => a.GetClassAt(0).Section.startMinute
                                   .CompareTo(b.GetClassAt(0).Section.startMinute));
 
         Debug.Log($"[ScheduleManager] Built {_pendingStudents.Count} virtual student schedules " +
                   $"from {slots.Count} slots.");
 
-        yield return StartCoroutine(FillPoolCoroutine());
+        IsScheduleBuilt = true;
+    }
 
+    /// <summary>
+    /// Called by the flow controller once the player has chosen an agent
+    /// count and pressed Start. Spawns exactly `requestedCount` agents right
+    /// away (bypassing the normal activation-lead-time gating), reporting
+    /// progress for a loading bar. Agents are fully positioned and
+    /// initialized but sit idle. TimeManager.IsRunning is still false at
+    /// this point, so NavigationAgent.ScheduleTick won't issue any movement.
+    /// Once loading completes, the normal rolling refill (PoolMaintenanceLoop)
+    /// takes over for backfilling as agents finish their day.
+    /// </summary>
+    public IEnumerator LoadAgents(int requestedCount, Action<int, int> onProgress, Action onComplete)
+    {
+        while (!IsScheduleBuilt) yield return null;
+
+        int count = Mathf.Clamp(requestedCount, 0, _pendingStudents.Count);
+        maxTotalAgents = count;
+
+        for (int i = 0; i < count; i++)
+        {
+            var next = _pendingStudents[_pendingCursor];
+            _pendingCursor++;
+            SpawnOrReuseAgent(next);
+            onProgress?.Invoke(i + 1, count);
+            yield return null; // spread instantiation across frames
+        }
+
+        onComplete?.Invoke();
         StartCoroutine(PoolMaintenanceLoop());
     }
 
@@ -196,13 +222,12 @@ public class ScheduleManager : MonoBehaviour
             var next = _pendingStudents[_pendingCursor];
             int firstClassStart = next.GetClassAt(0).Section.startMinute;
 
-            // Only activate once we're within the lead window of their first class.
             if (simMinute < firstClassStart - activationLeadMinutes)
-                break; // list is sorted, so nothing later needs checking yet either
+                break;
 
             _pendingCursor++;
             SpawnOrReuseAgent(next);
-            yield return null; // spread activation across frames
+            yield return null;
         }
     }
 
@@ -211,7 +236,7 @@ public class ScheduleManager : MonoBehaviour
         NavigationAgent agent = GetPooledAgent();
 
         Transform spawnOrigin = (exitNodes != null && exitNodes.Count > 0)
-            ? exitNodes[Random.Range(0, exitNodes.Count)].transform
+            ? exitNodes[UnityEngine.Random.Range(0, exitNodes.Count)].transform
             : spawnRoot;
         Vector3 pos = GetNavMeshSpawnPoint(spawnOrigin.position);
 
@@ -223,7 +248,6 @@ public class ScheduleManager : MonoBehaviour
 
     private NavigationAgent GetPooledAgent()
     {
-
         for (int i = 0; i < _agentPool.Count; i++)
         {
             var a = _agentPool[i];
@@ -249,9 +273,6 @@ public class ScheduleManager : MonoBehaviour
     private void HandleAgentFinished(NavigationAgent agent)
     {
         _activeAgents.Remove(agent);
-        // FillPoolCoroutine's maintenance loop will pick up the freed slot
-        // on its next tick and hand this agent (or a new one) the next
-        // chronologically-ready virtual student.
     }
 
     private static bool SectionsConflict(CourseSection a, CourseSection b)
@@ -259,7 +280,7 @@ public class ScheduleManager : MonoBehaviour
         bool timeOverlap = a.startMinute < b.endMinute && b.startMinute < a.endMinute;
         if (!timeOverlap) return false;
 
-        foreach (TimeManager.DayOfWeek day in System.Enum.GetValues(typeof(TimeManager.DayOfWeek)))
+        foreach (TimeManager.DayOfWeek day in Enum.GetValues(typeof(TimeManager.DayOfWeek)))
         {
             if (a.MeetsOnDay(day) && b.MeetsOnDay(day))
                 return true;
@@ -271,7 +292,7 @@ public class ScheduleManager : MonoBehaviour
     {
         foreach (float radius in new float[] { spawnRadius, spawnRadius * 2f, 5f, 10f })
         {
-            Vector2 circle = Random.insideUnitCircle * radius;
+            Vector2 circle = UnityEngine.Random.insideUnitCircle * radius;
             Vector3 candidate = origin + new Vector3(circle.x, 0f, circle.y);
             if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, radius, NavMesh.AllAreas))
                 return hit.position;
