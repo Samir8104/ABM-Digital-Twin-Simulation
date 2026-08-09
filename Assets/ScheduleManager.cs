@@ -86,10 +86,16 @@ public class ScheduleManager : MonoBehaviour
                 Debug.LogWarning($"[ScheduleManager] No room node for '{section.roomNumber}' — skipping.");
                 continue;
             }
+
+            int before = slots.Count;
             for (int i = 0; i < section.totalEnrolled; i++)
                 slots.Add((section, node));
-        }
+            int added = slots.Count - before;
 
+            Debug.Log($"[ScheduleManager] Section {section.roomNumber} {section.startMinute}-{section.endMinute} " +
+                      $"totalEnrolled={section.totalEnrolled} → added {added} slots.");
+        }
+        Debug.Log($"[ScheduleManager] TOTAL slots built: {slots.Count}");
         // ── Step 2: shuffle ──────────────────────────────────────────────────
         for (int i = slots.Count - 1; i > 0; i--)
         {

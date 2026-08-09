@@ -51,33 +51,43 @@ public static class CourseDataImporter
             string line = lines[i].Trim();
             if (string.IsNullOrWhiteSpace(line)) continue;
 
-            // Simple CSV split — commas inside quoted strings are handled by the
-            // quoted-field parser below.
             string[] cols = SplitCsvLine(line);
 
             if (cols.Length <= ColEnrolled)
             {
+                Debug.LogWarning($"[CourseDataImporter] Row {i} SKIPPED (too few columns: {cols.Length}). Raw: {line}");
                 skipped++;
                 continue;
             }
 
-            // ?? Room ?????????????????????????????????????????????????????????
             string room = cols[ColRoom].Trim();
-            if (string.IsNullOrEmpty(room)) { skipped++; continue; }
+            if (string.IsNullOrEmpty(room))
+            {
+                Debug.LogWarning($"[CourseDataImporter] Row {i} SKIPPED (empty room). Raw: {line}");
+                skipped++; continue;
+            }
 
-            // ?? Enrolled ?????????????????????????????????????????????????????
             string enrolledStr = cols[ColEnrolled].Trim();
             if (!int.TryParse(enrolledStr, out int enrolled) || enrolled <= 0)
-            { skipped++; continue; }
+            {
+                Debug.LogWarning($"[CourseDataImporter] Row {i} SKIPPED (bad enrolled '{enrolledStr}'). Room={room}. Raw: {line}");
+                skipped++; continue;
+            }
 
-            // ?? Times ????????????????????????????????????????????????????????
             int startMin = ParseTime(cols[ColStart].Trim());
             int endMin = ParseTime(cols[ColEnd].Trim());
-            if (startMin < 0 || endMin < 0) { skipped++; continue; }
+            if (startMin < 0 || endMin < 0)
+            {
+                Debug.LogWarning($"[CourseDataImporter] Row {i} SKIPPED (bad time. start='{cols[ColStart]}' end='{cols[ColEnd]}'). Room={room}. Raw: {line}");
+                skipped++; continue;
+            }
 
-            // ?? Days ?????????????????????????????????????????????????????????
             CourseDays days = ParseDays(cols[ColDays].Trim());
-            if (days == CourseDays.None) { skipped++; continue; }
+            if (days == CourseDays.None)
+            {
+                Debug.LogWarning($"[CourseDataImporter] Row {i} SKIPPED (unparseable days '{cols[ColDays]}'). Room={room}. Raw: {line}");
+                skipped++; continue;
+            }
 
             asset.sections.Add(new CourseSection
             {
