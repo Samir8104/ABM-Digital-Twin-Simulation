@@ -276912,7 +276912,7 @@ MonoBehaviour:
   - {fileID: 1426010757}
   - {fileID: 1169227534}
   - {fileID: 1173366991}
-  maxTotalAgents: 500
+  maxTotalAgents: 300
   minClassesPerAgent: 1
   maxClassesPerAgent: 4
   activationLeadMinutes: 20

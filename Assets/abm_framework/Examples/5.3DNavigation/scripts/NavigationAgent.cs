@@ -32,6 +32,7 @@ public class NavigationAgent : AbstractAgent
 
     public int DepartureWindowMinutes { get; private set; }
     public AgentSchedule Schedule => _schedule;
+    private int _scheduleGeneration = 0;
 
     // ── Class-end guard ───────────────────────────────────────────────────────
     private bool _classEndHandled = false;
@@ -295,7 +296,7 @@ public class NavigationAgent : AbstractAgent
                 {
                     _classEndHandled = true;
                     _schedule.SetActivity(AgentActivity.Wandering);
-                    StartCoroutine(DepartureDelayRoutine(Random.Range(0f, 8f)));
+                    StartCoroutine(DepartureDelayRoutine(Random.Range(0f, 4f), _scheduleGeneration));
                 }
                 break;
 
@@ -305,9 +306,10 @@ public class NavigationAgent : AbstractAgent
         }
     }
 
-    IEnumerator DepartureDelayRoutine(float delaySeconds)
+    IEnumerator DepartureDelayRoutine(float delaySeconds, int generation)
     {
         yield return new WaitForSeconds(delaySeconds);
+        if (generation != _scheduleGeneration) yield break; // agent got reassigned mid-delay — abort
         PostClassDecision();
     }
     // ── Post-class decision ───────────────────────────────────────────────────
@@ -454,8 +456,10 @@ public class NavigationAgent : AbstractAgent
         nmAgent.velocity = Vector3.zero;
 
         if (!hasMoreClasses)
+        {
             _schedule.SetActivity(AgentActivity.Done);
             OnFinishedForDay?.Invoke(this);
+        }
     }
 
     void RespawnAgent()
@@ -542,7 +546,6 @@ public class NavigationAgent : AbstractAgent
         SafeDestroyStepper("StayInPlace");
         switch (_schedule.CurrentActivity)
         {
-            case AgentActivity.InClass:
             case AgentActivity.Wandering:
                 PostClassDecision();
                 break;
@@ -628,8 +631,6 @@ public class NavigationAgent : AbstractAgent
         {
             case AgentActivity.GoingToClass:
                 _schedule.SetActivity(AgentActivity.InClass);
-                int minutesLeftInClass = Mathf.Max(1, _schedule.EndMinute - (_time.CurrentHour * 60 + _time.CurrentMinute));
-                StartTimedStay(minutesLeftInClass);
                 break;
 
             case AgentActivity.GoingToBathroom:
@@ -698,6 +699,8 @@ public class NavigationAgent : AbstractAgent
                 nearbyAgents++;
         }
         Debug.Log($"[{name}] [TIMING] SetTarget → {room.name}, nearbyAgents(<5m)={nearbyAgents} at real-t={Time.realtimeSinceStartup:F2}");
+        Debug.Log($"[{name}] SetTarget → room={room.name}, target={target}, myPos={transform.position}, activity={_schedule.CurrentActivity}");
+
 
         _moveLogCount = 0;
         SafeDestroyStepper("CheckDistToTarget");
@@ -720,6 +723,9 @@ public class NavigationAgent : AbstractAgent
     {
         _pendingRegistration.Remove("Move");
         if (_isRiding) return;
+
+        if (Time.frameCount % 30 == 0) // throttle, avoid log spam
+            Debug.Log($"[{name}] Move: velocity={nmAgent.velocity}, pathStatus={nmAgent.pathStatus}, remainingDist={nmAgent.remainingDistance}");
         nmAgent.velocity = Vector3.zero;
         nmAgent.nextPosition = transform.position + nmAgent.desiredVelocity * 0.03f;
         transform.LookAt(nmAgent.nextPosition, Vector3.up);
