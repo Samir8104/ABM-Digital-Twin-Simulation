@@ -35,6 +35,8 @@ public class ScheduleManager : MonoBehaviour
 
     private List<AgentSchedule> _pendingStudents = new();
     private int _pendingCursor = 0;
+    public bool RosterReady { get; private set; }
+    public IReadOnlyList<AgentSchedule> PendingStudents => _pendingStudents;
 
     private readonly List<NavigationAgent> _agentPool = new();
     private readonly HashSet<NavigationAgent> _activeAgents = new();
@@ -168,6 +170,8 @@ public class ScheduleManager : MonoBehaviour
 
         Debug.Log($"[ScheduleManager] Built {_pendingStudents.Count} virtual student schedules " +
                   $"from {slots.Count} slots.");
+
+        RosterReady = true;
 
         IsScheduleBuilt = true;
     }

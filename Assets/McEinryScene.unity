@@ -120794,6 +120794,57 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 6519533720837827151, guid: da48adc25bb4a8a4d88a16e219db132c, type: 3}
   m_PrefabInstance: {fileID: 717247277}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &924091031
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 924091033}
+  - component: {fileID: 924091032}
+  m_Layer: 0
+  m_Name: FillerAgentManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &924091032
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 924091031}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e8f0b7696ce5e264ebbc6a1ccf8d4a53, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FillerAgentManager
+  scheduleManager: {fileID: 1877312286}
+  nCont: {fileID: 1844294289}
+  timeManager: {fileID: 1976079723}
+  fillerAgentPrefab: {fileID: 3623324467911447722, guid: aa2ad49d1085f2249aab7daa60e8f1f4, type: 3}
+  spawnRoot: {fileID: 1501906859460518293}
+  activationLeadMinutes: 20
+  pollInterval: 1
+--- !u!4 &924091033
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 924091031}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &924104320 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -6326348791955348003, guid: 85bc0cc5a2e8bcb4092f07103b00b52d, type: 3}
@@ -314888,6 +314939,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 75dadfd61392144488ec3b054751512b, type: 3}
+--- !u!4 &1501906859460518293 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 1549373961399564557, guid: 75dadfd61392144488ec3b054751512b, type: 3}
+  m_PrefabInstance: {fileID: 1501906859460518292}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &1602050908944667329 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8401791514442957323, guid: da48adc25bb4a8a4d88a16e219db132c, type: 3}
@@ -315268,3 +315324,4 @@ SceneRoots:
   - {fileID: 1351638515}
   - {fileID: 1034242766}
   - {fileID: 1446527362}
+  - {fileID: 924091033}
