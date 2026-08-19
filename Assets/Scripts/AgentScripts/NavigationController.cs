@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
+// NavigationController finds rooms by numbers and ensures agents dont all go to the same point in a room.
+// Basically it always finds the nearest point an agent is looking for. So if an agent is trying to exit, then this script returns the closest exit.
 public class NavigationController : AbstractController
 {
     [Header("Simulation Parameters")]
@@ -32,7 +34,7 @@ public class NavigationController : AbstractController
     public string bathroomNodeName = "Bathroom";
     public string studyingNodeName = "Studying";
 
-    // ── Exit nodes ────────────────────────────────────────────────────────────
+
     [Header("Exit Nodes")]
     [Tooltip("Tag all exit GameObjects with this tag. Agents heading to Done will pick one at random.")]
     public string exitNodeTag = "ExitNode";

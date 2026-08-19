@@ -4,7 +4,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
-
+// Calls init and Assigns a new schedule on the navigationAgent.
+// ScheduleManager spawns in every agent but it does it chronologically. Agents dont spawn in all at once, instead the agents with the earlier classes spawn first.
 public class ScheduleManager : MonoBehaviour
 {
     [Header("References")]
@@ -97,6 +98,7 @@ public class ScheduleManager : MonoBehaviour
             }
 
             int before = slots.Count;
+            // For each student enrolled in a class, add a slot. 
             for (int i = 0; i < section.totalEnrolled; i++)
                 slots.Add((section, node));
             int added = slots.Count - before;
@@ -111,9 +113,10 @@ public class ScheduleManager : MonoBehaviour
             int j = UnityEngine.Random.Range(0, i + 1);
             (slots[i], slots[j]) = (slots[j], slots[i]);
         }
-
+        // Create a new list of students for each section. 
         var students = new List<List<(CourseSection, GameObject)>>();
-
+        // This is the main loop which assigns agents to their respective classes. 
+        // It ensures to avoid a time conflict. However, two classes at the same time on diff days does not result in a conflict. 
         foreach (var slot in slots)
         {
             bool assigned = false;
@@ -143,10 +146,12 @@ public class ScheduleManager : MonoBehaviour
             if (!assigned)
                 students.Add(new List<(CourseSection, GameObject)> { slot });
         }
-
+        // This loop is designed to ensure each agent has a realistic amount of classes, 1-4 for now. This is great for realism but leads to a downside of some classes having less students. 
+        // However with the filler system, new agents spawn in for each class to ensure that the total enrolled students matches the actual amount of students. 
         foreach (var student in students)
         {
             int target = UnityEngine.Random.Range(minClassesPerAgent, maxClassesPerAgent + 1);
+            // student.Count is how many classes the student has. 
             if (student.Count > target)
             {
                 for (int i = student.Count - 1; i >= target; i--)
@@ -215,7 +220,11 @@ public class ScheduleManager : MonoBehaviour
             yield return StartCoroutine(FillPoolCoroutine());
         }
     }
-
+    // Basically this script is a band-aid solution to the problem of having not enough agent.
+    // When an agent finishes their day and exits the building, they despawn and this script spawns in a new agent from a pool of agents. 
+    // FillPoolCorutine runs every few seconds (poolCheckInterval)
+    // The pool of agents already have their schedule set, but due to their class being later in the day and/or the sim has hit the max agent count they could not spawn. 
+    // However this pooling system leads to an issue where if max agent count is too low, then pooled agents can completely miss their class. I'm thinking of making it only pool when the sim is running more than x amount of agents. But we'll see. 
     private IEnumerator FillPoolCoroutine()
     {
         int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;

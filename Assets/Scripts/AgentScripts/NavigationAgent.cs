@@ -3,6 +3,13 @@ using ABMU.Core;
 using UnityEngine.AI;
 using System.Collections;
 
+
+// NavigationAgent is a state machine connected to every NavMesh Agent.
+// Rather than using Unity's update function, it uses the ABMU's scheduler AKA steppers
+// Agent basically loops like this: Read currentActivity - > Decide what to do - > Change Activity - > Move - > Arrive at place and decide again
+
+// A lot of methods in this script work like this : (Given current activity, decide next activity and where to move the agent.)
+// PostClassDecision() and AfterActivityDecision() work like this.
 public class NavigationAgent : AbstractAgent
 {
     #region References
@@ -174,11 +181,16 @@ public class NavigationAgent : AbstractAgent
         NavigateTo(classEntry.ClassroomNode);
     }
 
-    // Creates stepper functions for the ABMU script. Steppers run every frame on a step interval.
+    // ABMU gives every Agent access to a method called CreateStepper()
+    // A stepper basically calls a method every N ticks, at X priority related to other methods
+    // By using a stepper instead of Unity's update function, we can opt in/opt out of methods. This means that it is more cost effective. 
+    // The reason why I'm using this 'SafeCreateStepper' function is because creating/destroying steppers isn't instant. 
+  
     void SafeCreateStepper(string stepperName, ABMU.Utilities.Del method, int step, int priority)
     {
         switch (stepperName)
         {
+            // The stepperAlive boolean is there to ensure that the script does not accidentally create 2 stepper functions
             case "DeferredInit":
                 if (_stepperAlive_DeferredInit) return;
                 _stepperAlive_DeferredInit = true; break;
@@ -204,9 +216,7 @@ public class NavigationAgent : AbstractAgent
         // If this stepper was created this tick but ABMU hasn't run
         // RegisterSteppersCreated yet, it isn't in the scheduler dict.
         // Calling DestroyStepper now causes NullReferenceException in
-        // DeregisterDestroyedStepper. Just clear the flags instead —
-        // the stepper will be registered next tick but the liveness flag
-        // being false means it will do nothing and never be re-destroyed.
+        // DeregisterDestroyedStepper. 
         if (_pendingRegistration.Contains(stepperName))
         {
             _pendingRegistration.Remove(stepperName);
@@ -244,7 +254,8 @@ public class NavigationAgent : AbstractAgent
         DestroyStepper(stepperName);
     }
 
-
+    // DeferredInit is an initilization function that runs once and waits until all variables are non-null
+    // The reason why DeferredInit is waiting is because it needs to wait until the schedule is initialized.
     void DeferredInit()
     {
         if (!_stepperAlive_DeferredInit) return;
@@ -259,6 +270,9 @@ public class NavigationAgent : AbstractAgent
     #endregion
 
     #region AgentDecisions
+
+    // ScheduleTick is the main brain of the agent. It runs much slower than other scripts (every 30 ticks) 
+    // The function looks at the currentActivity state and decides what the agent should do next.
     void ScheduleTick()
     {
         if (!_stepperAlive_ScheduleTick) return;
@@ -537,6 +551,7 @@ public class NavigationAgent : AbstractAgent
         SafeCreateStepper("StayInPlace", StayInPlace, 2, 1);
     }
 
+    // Triggers any time the agent needs to wait X amount of time. Does exactly what it says then triggers another decision. 
     void StayInPlace()
     {
         if (!_stepperAlive_StayInPlace) return;
@@ -603,10 +618,14 @@ public class NavigationAgent : AbstractAgent
 
         SetTarget(room);
     }
+    // CheckDistToTarget checks the vector3 distance to the current target every two ticks. 
+    // Once close enough, the function checks the state machine to see what it should do next. For example, if the agent is studying then this function ensures the agent studys for x amount of time.
     void CheckDistToTarget()
     {
         if (!_stepperAlive_CheckDist) return;
         _pendingRegistration.Remove("CheckDistToTarget");
+
+        // This is where the function checks how close it is to a target. If the agent is still far away then it returns and the agent keeps walking.
         float d = Vector3.Distance(transform.position, target);
         if (d >= nCont.distToTargetThreshold) { isNearTarget = false; return; }
         Debug.Log($"[{name}] [TIMING] CheckDistToTarget arrived at real-t={Time.realtimeSinceStartup:F2}, dist={d:F2}");
@@ -636,7 +655,7 @@ public class NavigationAgent : AbstractAgent
             case AgentActivity.GoingToBathroom:
                 _schedule.SetActivity(AgentActivity.InBathroom);
                 int randomTime = Random.Range(2, 6);
-                Debug.Log($"[{name}] is staying in the bathroom for " + randomTime + " minutes"); // this only fires once, so that means the problem is in startTimedstay
+                Debug.Log($"[{name}] is staying in the bathroom for " + randomTime + " minutes");
                 StartTimedStay(randomTime);
 
                 
@@ -644,10 +663,7 @@ public class NavigationAgent : AbstractAgent
 
             case AgentActivity.GoingToStudying:
                 _schedule.SetActivity(AgentActivity.InStudying);
-                // Short, per-agent-jittered check-in instead of a blind 60-120 min roll.
-                // AfterActivityDecision (called when this elapses) already knows how to
-                // send the agent to a class, leave the building, or wait again — we just
-                // need to actually reach it soon instead of locking in for hours up front.
+
                 StartTimedStay(Random.Range(10, 21));
                 break;
 
@@ -719,6 +735,7 @@ public class NavigationAgent : AbstractAgent
 
     private bool _loggedFirstMove = false;
     private int _moveLogCount = 0;
+    // Move runs every tick and it moves the agents transform to the desired target. Instead of using unity's automatic Agent.updatePosition movement, we move the agent manually. 
     void Move()
     {
         _pendingRegistration.Remove("Move");

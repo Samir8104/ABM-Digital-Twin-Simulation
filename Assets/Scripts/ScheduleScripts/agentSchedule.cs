@@ -10,9 +10,7 @@ public enum AgentActivity
 }
 
 /// <summary>
-/// Holds a full day's worth of classes for one agent.
-/// Sorted by start time at construction so NextClass / CurrentClass lookups are O(n) 
-/// over a tiny list (max 4 sections per agent).
+/// Stores each agents class list and the day/times each class is. NavigationAgent does not store any class info, it instead relies on this script for it's information. 
 /// </summary>
 public class AgentSchedule
 {
