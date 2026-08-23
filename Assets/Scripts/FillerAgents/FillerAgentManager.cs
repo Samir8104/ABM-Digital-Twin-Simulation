@@ -25,12 +25,25 @@ public class FillerAgentManager : MonoBehaviour
     [Header("Priority")]
     public float startupDelaySeconds = 5f;
 
+    [Header("Enable/Disable")]
+    public bool fillersEnabled = true;
+    public bool despawnExistingOnDisable = true;
+
 
     private readonly Dictionary<CourseSection, int> _deficits = new();
     private readonly HashSet<(CourseSection section, int day)> _spawnedToday = new();
     private ElevatorCallStation[] _callStations;
 
 
+
+    public void SetFillersEnabled(bool enabled)
+    {
+        fillersEnabled = enabled;
+        if (!enabled)
+        {
+            _spawnQueue.Clear();
+        }
+    }
 
     private void Start()
     {
@@ -111,6 +124,7 @@ public class FillerAgentManager : MonoBehaviour
 
     private void SpawnFillersForSection(CourseSection section, int count)
     {
+        if (!fillersEnabled) return;
         GameObject room = nCont.GetRoomByNumber(section.roomNumber);
         if (room == null)
         {
@@ -149,6 +163,8 @@ public class FillerAgentManager : MonoBehaviour
 
     private void SpawnOneFiller(CourseSection section, GameObject room)
     {
+        if (!fillersEnabled) return;
+
         // basically this line says, if theere are exit nodes, use a random one, otherwise just use the spawnroot as a fallback. 
         Transform origin = (scheduleManager.exitNodes != null && scheduleManager.exitNodes.Count > 0)
         ? scheduleManager.exitNodes[Random.Range(0, scheduleManager.exitNodes.Count)].transform : spawnRoot;

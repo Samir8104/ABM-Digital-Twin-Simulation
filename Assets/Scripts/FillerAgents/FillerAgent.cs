@@ -223,7 +223,7 @@ public class FillerAgent : AbstractAgent
         // tick so the agent doesn't stay pinned at spawn height while walking
         // over a floor that rises/dips.
         if (NavMesh.SamplePosition(nextPos, out NavMeshHit hit, 2f, NavMesh.AllAreas))
-            nextPos.y = hit.position.y + 0.6f;
+            nextPos.y = hit.position.y + 0.55f;
 
         if (delta.sqrMagnitude > 0.0001f) transform.LookAt(nextPos, Vector3.up);
         nmAgent.nextPosition = nextPos;
