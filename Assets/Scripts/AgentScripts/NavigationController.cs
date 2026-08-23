@@ -38,6 +38,7 @@ public class NavigationController : AbstractController
     [Header("Exit Nodes")]
     [Tooltip("Tag all exit GameObjects with this tag. Agents heading to Done will pick one at random.")]
     public string exitNodeTag = "ExitNode";
+    public float exitNodeScatterRadius = 2.5f;
 
     // Resolved once at Init.
     private GameObject _bathroomNode;
@@ -81,7 +82,21 @@ public class NavigationController : AbstractController
         if (_officeHoursNodes == null || _officeHoursNodes.Length == 0) return null;
         return _officeHoursNodes[Random.Range(0, _officeHoursNodes.Length)];
     }
+    // Checks a radius around the node to see if there are any valid points. Returns a random valid point, fallsback on the nodes exact position :0
+    public Vector3 GetScatteredPointNearNode(GameObject node)
+    {
+        if (node == null) return Vector3.zero;
 
+        Vector3 origin = node.transform.position;
+        foreach(float radius in new float[] {exitNodeScatterRadius, exitNodeScatterRadius * 2f, 5f })
+        {
+            Vector2 circle = Random.insideUnitCircle * radius;
+            Vector3 candidate = origin + new Vector3(circle.x, 0f, circle.y);
+            if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, radius, NavMesh.AllAreas))
+                return hit.position;
+        }
+        return origin;
+    }
 
 
     private GameObject GetClosestNodeWithTag(string tag, Vector3 fromPosition)

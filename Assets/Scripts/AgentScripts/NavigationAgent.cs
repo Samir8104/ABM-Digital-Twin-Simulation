@@ -445,7 +445,8 @@ public class NavigationAgent : AbstractAgent
         Debug.Log($"[{name}] [TIMING] LeaveBuilding → {exitNode.name} at real-t={Time.realtimeSinceStartup:F2}");
         _schedule.SetActivity(AgentActivity.GoingToExit);
         _pendingLeaveIsExit = true;
-        NavigateDirect(exitNode);
+        Vector3 scatterTarget = nCont.GetScatteredPointNearNode(exitNode);
+        SetScatteredTarget(exitNode, scatterTarget);
     }
     #endregion
 
@@ -486,7 +487,7 @@ public class NavigationAgent : AbstractAgent
         GameObject spawnNode = nCont.GetRandomExitNode();
         if (spawnNode != null)
         {
-            Vector3 pos = spawnNode.transform.position;
+            Vector3 pos = nCont.GetScatteredPointNearNode(spawnNode);
             transform.position = pos;
             nmAgent.Warp(pos);
         }
@@ -679,6 +680,22 @@ public class NavigationAgent : AbstractAgent
             default:
                 break;
         }
+    }
+
+    public void SetScatteredTarget(GameObject node, Vector3 scatteredPoint)
+    {
+        SnapToNavMesh();
+        targetRoom = node;
+        target = scatteredPoint;
+
+        SafeDestroyStepper("CheckDistToTarget");
+        SafeDestroyStepper("Move");
+
+        nmAgent.isStopped = false;
+        nmAgent.SetDestination(target);
+        SetMovingAnimState(true);
+        SafeCreateStepper("CheckDistToTarget", CheckDistToTarget, 2, 100);
+        SafeCreateStepper("Move", Move, 1, 105);
     }
     private int GetFloorFromPosition(Vector3 pos)
     {

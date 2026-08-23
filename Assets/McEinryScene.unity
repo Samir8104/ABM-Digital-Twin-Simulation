@@ -275570,6 +275570,7 @@ MonoBehaviour:
   bathroomNodeName: Bathroom
   studyingNodeName: Studying
   exitNodeTag: ExitNode
+  exitNodeScatterRadius: 2.5
 --- !u!4 &1844294290
 Transform:
   m_ObjectHideFlags: 0
