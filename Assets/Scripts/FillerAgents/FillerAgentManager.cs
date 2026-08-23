@@ -16,25 +16,44 @@ public class FillerAgentManager : MonoBehaviour
     public int activationLeadMinutes = 15;
     public float pollInterval = 1f;
 
+
+    [Header("Spawn Throttling")]
+    [SerializeField] int maxSpawnsPerFrame = 5;
+    private readonly Queue<(CourseSection section, GameObject room)> _spawnQueue = new();
+    private bool _spawnCoroutineRunning = false;
+
+    [Header("Priority")]
+    public float startupDelaySeconds = 5f;
+
+
     private readonly Dictionary<CourseSection, int> _deficits = new();
     private readonly HashSet<(CourseSection section, int day)> _spawnedToday = new();
+    private ElevatorCallStation[] _callStations;
+
+
 
     private void Start()
     {
         if (scheduleManager == null) scheduleManager = FindObjectOfType<ScheduleManager>();
         if (nCont == null) nCont = FindObjectOfType<NavigationController>();
         if (timeManager == null) timeManager = FindObjectOfType<TimeManager>();
+
+        _callStations = FindObjectsOfType<ElevatorCallStation>();
         StartCoroutine(WaitForRosterThenRun());
     }
 
     private IEnumerator WaitForRosterThenRun()
     {
         while (scheduleManager == null || !scheduleManager.RosterReady)
+        {
             yield return null;
+        }
 
         ComputeDeficits();
+        yield return new WaitForSeconds(startupDelaySeconds);
         StartCoroutine(PollLoop());
     }
+
 
     // For every section, real attendance = how many virtual students actually
     // have it on their schedule. Deficit = enrolled - real attendance.
@@ -98,23 +117,56 @@ public class FillerAgentManager : MonoBehaviour
             Debug.LogWarning($"[FillerAgentManager] No room node for '{section.roomNumber}' — skipping fillers.");
             return;
         }
-
-        var exitNodes = scheduleManager.exitNodes;
-        for (int i = 0; i < count; i++)
+        for(int i = 0; i < count; i++)
         {
-            Transform origin = (exitNodes != null && exitNodes.Count > 0)
-                ? exitNodes[Random.Range(0, exitNodes.Count)].transform
-                : spawnRoot;
-            Vector3 pos = GetNavMeshSpawnPoint(origin.position);
-
-            GameObject go = Instantiate(fillerAgentPrefab, pos, Quaternion.identity);
-            go.name = $"Filler_{section.roomNumber}_{section.startMinute}_{i}";
-
-            var filler = go.GetComponent<FillerAgent>();
-            if (filler == null) { Debug.LogError("[FillerAgentManager] fillerAgentPrefab missing FillerAgent!"); Destroy(go); continue; }
-            filler.Setup(section, room, pos);
+            _spawnQueue.Enqueue((section, room));
+        }
+        if (!_spawnCoroutineRunning)
+        {
+            StartCoroutine(ProcessSpawnQueue());
         }
     }
+    
+    private IEnumerator ProcessSpawnQueue()
+    {
+        _spawnCoroutineRunning = true;
+        int spawnedThisFrame = 0;
+        // While there are filler agents in queue to be spawned, spawn them but dont spawn more than the max spawned per frame bc that causes LAG!!
+        while (_spawnQueue.Count > 0)
+        {
+            var (section, room) = _spawnQueue.Dequeue(); // take the next agent
+            SpawnOneFiller(section, room);
+            spawnedThisFrame++;
+            if(spawnedThisFrame >= maxSpawnsPerFrame)
+            {
+                spawnedThisFrame = 0;
+                yield return null;
+            }
+        }
+
+        _spawnCoroutineRunning = false;
+    }
+
+    private void SpawnOneFiller(CourseSection section, GameObject room)
+    {
+        // basically this line says, if theere are exit nodes, use a random one, otherwise just use the spawnroot as a fallback. 
+        Transform origin = (scheduleManager.exitNodes != null && scheduleManager.exitNodes.Count > 0)
+        ? scheduleManager.exitNodes[Random.Range(0, scheduleManager.exitNodes.Count)].transform : spawnRoot;
+        Vector3 pos = GetNavMeshSpawnPoint(origin.position);
+
+        GameObject go = Instantiate(fillerAgentPrefab, pos, Quaternion.identity); // Spawn the agent
+        go.name = $"Filler_{section.roomNumber}_{section.startMinute}";
+        var filler = go.GetComponent<FillerAgent>();
+        if(filler == null) 
+        { 
+          Debug.LogError("Filler agent prefab missing"); 
+          Destroy(go); 
+          return;
+        }
+        filler.Setup(section, room, pos, nCont, timeManager, _callStations);
+
+    }
+
 
     private Vector3 GetNavMeshSpawnPoint(Vector3 origin)
     {

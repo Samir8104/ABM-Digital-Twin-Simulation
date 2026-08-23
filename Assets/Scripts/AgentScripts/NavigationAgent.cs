@@ -726,7 +726,7 @@ public class NavigationAgent : AbstractAgent
         nmAgent.SetDestination(target);
         SetMovingAnimState(true);
         SafeCreateStepper("CheckDistToTarget", CheckDistToTarget, 2, 100);
-        SafeCreateStepper("Move", Move, 1, 105);
+        SafeCreateStepper("Move", Move, 1, 50);
    
     }
     #endregion

@@ -29,15 +29,16 @@ public class FillerAgent : AbstractAgent
     private bool _moveAlive, _movePending;
     private ElevatorCallStation[] _callStations;
 
-    public void Setup(CourseSection section, GameObject classroom, Vector3 spawnPos)
+    public void Setup(CourseSection section, GameObject classroom, Vector3 spawnPos, NavigationController controller, TimeManager time, ElevatorCallStation[] callStations)
     {
         _section = section;
         _classroom = classroom;
 
         base.Init(); // must run before any CreateStepper call
         nmAgent = GetComponent<NavMeshAgent>();
-        nCont = FindObjectOfType<NavigationController>();
-        _time = FindObjectOfType<TimeManager>();
+        nCont = controller;
+        _time = time;
+        _callStations = callStations;
 
         nmAgent.updatePosition = false;
         nmAgent.velocity = Vector3.zero;
@@ -156,10 +157,7 @@ public class FillerAgent : AbstractAgent
 
         if (destFloor >= 0 && curFloor >= 0 && destFloor != curFloor)
         {
-            // No elevator/stairs simulation for fillers — just relocate them to
-            // the destination floor directly, then path normally from there.
-            // Prevents them from manually walking straight across a floor gap
-            // (stairwell/shaft opening) with no collision to stop them.
+
             var station = System.Array.Find(_callStations, s => s.floorIndex == destFloor);
             Vector3 warpNear = station != null ? station.transform.position : _target;
             if (NavMesh.SamplePosition(warpNear, out NavMeshHit hit, 5f, NavMesh.AllAreas))
@@ -225,7 +223,7 @@ public class FillerAgent : AbstractAgent
         // tick so the agent doesn't stay pinned at spawn height while walking
         // over a floor that rises/dips.
         if (NavMesh.SamplePosition(nextPos, out NavMeshHit hit, 2f, NavMesh.AllAreas))
-            nextPos.y = hit.position.y;
+            nextPos.y = hit.position.y + 0.6f;
 
         if (delta.sqrMagnitude > 0.0001f) transform.LookAt(nextPos, Vector3.up);
         nmAgent.nextPosition = nextPos;

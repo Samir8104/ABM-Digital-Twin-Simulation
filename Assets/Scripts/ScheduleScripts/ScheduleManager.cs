@@ -12,6 +12,7 @@ public class ScheduleManager : MonoBehaviour
     public GameObject agentPrefab;
     public CourseData courseData;
     public Transform spawnRoot;
+    [SerializeField] NavigationController nCont;
     public float spawnRadius = 3f;
 
     [Header("Exits / Entrances")]
@@ -23,6 +24,7 @@ public class ScheduleManager : MonoBehaviour
     [Header("Realism")]
     public int minClassesPerAgent = 1;
     public int maxClassesPerAgent = 4;
+
 
     [Header("Rolling Spawn (used for refill AFTER the initial load)")]
     [Tooltip("How many sim-minutes before a virtual student's first class they may be activated.")]
@@ -258,6 +260,9 @@ public class ScheduleManager : MonoBehaviour
 
         _activeAgents.Add(agent);
     }
+    
+
+    
 
     private NavigationAgent GetPooledAgent()
     {

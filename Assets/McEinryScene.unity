@@ -120830,6 +120830,8 @@ MonoBehaviour:
   spawnRoot: {fileID: 1501906859460518293}
   activationLeadMinutes: 20
   pollInterval: 1
+  maxSpawnsPerFrame: 5
+  startupDelaySeconds: 5
 --- !u!4 &924091033
 Transform:
   m_ObjectHideFlags: 0
@@ -279518,6 +279520,7 @@ MonoBehaviour:
   agentPrefab: {fileID: 3623324467911447722, guid: 5a9bd96456c30ba4ab6d266ab595bdd6, type: 3}
   courseData: {fileID: 11400000, guid: 81f412426450b5a4f9a62b206eccb092, type: 2}
   spawnRoot: {fileID: 998138343}
+  nCont: {fileID: 0}
   spawnRadius: 0.75
   exitNodes:
   - {fileID: 264258840}
