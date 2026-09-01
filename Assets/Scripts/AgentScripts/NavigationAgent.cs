@@ -616,8 +616,8 @@ public class NavigationAgent : AbstractAgent
                 return;
             }
         }
-
-        SetTarget(room);
+        Vector3 ScattertedTarget = nCont.GetScatteredPointNearNode(room);
+        SetScatteredTarget(room, ScattertedTarget);
     }
     // CheckDistToTarget checks the vector3 distance to the current target every two ticks. 
     // Once close enough, the function checks the state machine to see what it should do next. For example, if the agent is studying then this function ensures the agent studys for x amount of time.

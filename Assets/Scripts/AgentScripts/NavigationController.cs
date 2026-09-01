@@ -38,7 +38,7 @@ public class NavigationController : AbstractController
     [Header("Exit Nodes")]
     [Tooltip("Tag all exit GameObjects with this tag. Agents heading to Done will pick one at random.")]
     public string exitNodeTag = "ExitNode";
-    public float exitNodeScatterRadius = 2.5f;
+    public float exitNodeScatterRadius = 5f;
 
     // Resolved once at Init.
     private GameObject _bathroomNode;
@@ -88,7 +88,7 @@ public class NavigationController : AbstractController
         if (node == null) return Vector3.zero;
 
         Vector3 origin = node.transform.position;
-        foreach(float radius in new float[] {exitNodeScatterRadius, exitNodeScatterRadius * 2f, 5f })
+        foreach(float radius in new float[] {exitNodeScatterRadius, exitNodeScatterRadius * 4f, 5f })
         {
             Vector2 circle = Random.insideUnitCircle * radius;
             Vector3 candidate = origin + new Vector3(circle.x, 0f, circle.y);

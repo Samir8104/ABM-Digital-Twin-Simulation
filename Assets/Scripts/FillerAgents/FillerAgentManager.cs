@@ -58,14 +58,17 @@ public class FillerAgentManager : MonoBehaviour
     private IEnumerator WaitForRosterThenRun()
     {
         while (scheduleManager == null || !scheduleManager.RosterReady)
-        {
             yield return null;
-        }
+
+        // Prevent the filler agents from running during the start screen
+        while (timeManager == null || !timeManager.IsRunning)
+            yield return null;
 
         ComputeDeficits();
         yield return new WaitForSeconds(startupDelaySeconds);
         StartCoroutine(PollLoop());
     }
+
 
 
     // For every section, real attendance = how many virtual students actually
@@ -99,6 +102,13 @@ public class FillerAgentManager : MonoBehaviour
         var wait = new WaitForSeconds(pollInterval);
         while (true)
         {
+            yield return wait;
+
+            // If the sim gets paused/returned to a menu mid-run, stop spawning
+            // until it resumes, never spawn fillers while paused.
+            if (timeManager == null || !timeManager.IsRunning)
+                continue;
+
             int simMinute = timeManager.CurrentHour * 60 + timeManager.CurrentMinute;
             var today = timeManager.GetCurrentDayOfWeek();
             int dayKey = timeManager.CurrentDay;
@@ -111,17 +121,14 @@ public class FillerAgentManager : MonoBehaviour
                 var key = (section, dayKey);
                 if (_spawnedToday.Contains(key)) continue;
 
-                if (simMinute >= section.endMinute) { _spawnedToday.Add(key); continue; } // missed today's window
+                if (simMinute >= section.endMinute) { _spawnedToday.Add(key); continue; }
                 if (simMinute < section.startMinute - activationLeadMinutes) continue;
 
                 SpawnFillersForSection(section, kvp.Value);
                 _spawnedToday.Add(key);
             }
-
-            yield return wait;
         }
     }
-
     private void SpawnFillersForSection(CourseSection section, int count)
     {
         if (!fillersEnabled) return;
@@ -140,18 +147,25 @@ public class FillerAgentManager : MonoBehaviour
             StartCoroutine(ProcessSpawnQueue());
         }
     }
-    
+
     private IEnumerator ProcessSpawnQueue()
     {
         _spawnCoroutineRunning = true;
         int spawnedThisFrame = 0;
-        // While there are filler agents in queue to be spawned, spawn them but dont spawn more than the max spawned per frame bc that causes LAG!!
+
         while (_spawnQueue.Count > 0)
         {
-            var (section, room) = _spawnQueue.Dequeue(); // take the next agent
+            if (timeManager != null && !timeManager.IsRunning)
+            {
+                yield return null;
+                continue;
+            }
+
+            var (section, room) = _spawnQueue.Dequeue();
             SpawnOneFiller(section, room);
+
             spawnedThisFrame++;
-            if(spawnedThisFrame >= maxSpawnsPerFrame)
+            if (spawnedThisFrame >= maxSpawnsPerFrame)
             {
                 spawnedThisFrame = 0;
                 yield return null;
@@ -160,7 +174,6 @@ public class FillerAgentManager : MonoBehaviour
 
         _spawnCoroutineRunning = false;
     }
-
     private void SpawnOneFiller(CourseSection section, GameObject room)
     {
         if (!fillersEnabled) return;
