@@ -125,6 +125,8 @@ public class NavigationAgent : AbstractAgent
         nmAgent.updatePosition = false;
         nmAgent.velocity = Vector3.zero;
         nmAgent.acceleration = 999f;
+
+        nmAgent.stoppingDistance = Mathf.Max(0.5f, nCont.distToTargetThreshold * 0.6f);
     }
 
     private bool _fullyInitialized = false;
@@ -755,15 +757,25 @@ public class NavigationAgent : AbstractAgent
     // Move runs every tick and it moves the agents transform to the desired target. Instead of using unity's automatic Agent.updatePosition movement, we move the agent manually. 
     void Move()
     {
+        if (!_stepperAlive_Move) return;
         _pendingRegistration.Remove("Move");
         if (_isRiding) return;
 
-        if (Time.frameCount % 30 == 0) // throttle, avoid log spam
-            Debug.Log($"[{name}] Move: velocity={nmAgent.velocity}, pathStatus={nmAgent.pathStatus}, remainingDist={nmAgent.remainingDistance}");
         nmAgent.velocity = Vector3.zero;
-        nmAgent.nextPosition = transform.position + nmAgent.desiredVelocity * 0.03f;
-        transform.LookAt(nmAgent.nextPosition, Vector3.up);
-        transform.position = nmAgent.nextPosition;
+        Vector3 delta = nmAgent.desiredVelocity * 0.03f;
+
+        float distToTarget = Vector3.Distance(transform.position, target);
+        if (delta.magnitude > distToTarget)
+            delta = delta.normalized * distToTarget;
+
+        Vector3 nextPos = transform.position + delta;
+
+        if (NavMesh.SamplePosition(nextPos, out NavMeshHit hit, 2f, NavMesh.AllAreas))
+            nextPos.y = hit.position.y + 0.6f;
+
+        if (delta.sqrMagnitude > 0.0001f) transform.LookAt(nextPos, Vector3.up);
+        nmAgent.nextPosition = nextPos;
+        transform.position = nextPos;
     }
 
 

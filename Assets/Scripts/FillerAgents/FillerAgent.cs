@@ -15,6 +15,7 @@ public class FillerAgent : AbstractAgent
     NavMeshAgent nmAgent;
     NavigationController nCont;
     TimeManager _time;
+    ElevatorCallStation[] _callStations;
     public Animator animator;
 
     private CourseSection _section;
@@ -27,9 +28,11 @@ public class FillerAgent : AbstractAgent
 
     private bool _tickAlive, _tickPending;
     private bool _moveAlive, _movePending;
-    private ElevatorCallStation[] _callStations;
 
-    public void Setup(CourseSection section, GameObject classroom, Vector3 spawnPos, NavigationController controller, TimeManager time, ElevatorCallStation[] callStations)
+    public event System.Action<FillerAgent> OnDespawned;
+
+    public void Setup(CourseSection section, GameObject classroom, Vector3 spawnPos,
+                       NavigationController controller, TimeManager time, ElevatorCallStation[] callStations)
     {
         _section = section;
         _classroom = classroom;
@@ -43,6 +46,13 @@ public class FillerAgent : AbstractAgent
         nmAgent.updatePosition = false;
         nmAgent.velocity = Vector3.zero;
         nmAgent.acceleration = 999f;
+
+        // Real deceleration zone so the agent slows smoothly on approach
+        // instead of steering at full speed almost to the exact point —
+        // without this, direction flips erratically at short range and
+        // the agent visibly spins in place.
+        nmAgent.stoppingDistance = Mathf.Max(0.5f, nCont.distToTargetThreshold * 0.6f);
+
         transform.position = spawnPos;
         nmAgent.Warp(spawnPos);
 
@@ -56,33 +66,8 @@ public class FillerAgent : AbstractAgent
         _headOutMinute = section.startMinute - Random.Range(5, 16);
         _state = State.WaitingToHead;
         if (animator != null) animator.SetBool("isIdle", true);
-        _callStations = FindObjectsOfType<ElevatorCallStation>();
+
         CreateTick();
-    }
-
-    private int GetFloorOfRoom(GameObject room)
-    {
-        if (room == null || _callStations == null) return -1;
-        float roomY = room.transform.position.y;
-        int best = -1; float bestDist = float.MaxValue;
-        foreach (var s in _callStations)
-        {
-            float d = Mathf.Abs(s.transform.position.y - roomY);
-            if (d < bestDist) { bestDist = d; best = s.floorIndex; }
-        }
-        return best;
-    }
-
-    private int GetFloorFromPosition(Vector3 pos)
-    {
-        if (_callStations == null) return -1;
-        int best = -1; float bestDist = float.MaxValue;
-        foreach (var s in _callStations)
-        {
-            float d = Mathf.Abs(s.transform.position.y - pos.y);
-            if (d < bestDist) { bestDist = d; best = s.floorIndex; }
-        }
-        return best;
     }
 
     void OnSimSpeedChanged(float mult)
@@ -90,8 +75,9 @@ public class FillerAgent : AbstractAgent
         if (nmAgent != null && _baseSpeed > 0f) nmAgent.speed = _baseSpeed * mult;
     }
 
-    // ?? Stepper lifecycle (same same-tick-create/destroy guard used elsewhere
-    //    in this project, to avoid the ABMU NullReferenceException) ??????????
+    // ?? Stepper lifecycle (same same-tick-create/destroy guard used
+    //    elsewhere in this project, to avoid the ABMU NullReferenceException
+    //    when a stepper is created and destroyed within the same tick) ??????
     void CreateTick() { if (_tickAlive) return; _tickAlive = true; _tickPending = true; CreateStepper(Tick, 20, 1); }
     void DestroyTick()
     {
@@ -110,8 +96,9 @@ public class FillerAgent : AbstractAgent
     // ?? State machine ?????????????????????????????????????????????????????
     void Tick()
     {
+        if (!_tickAlive) return;
         _tickPending = false;
-        if (!_tickAlive || _time == null) return;
+        if (_time == null || !_time.IsRunning) return;
 
         int simMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
 
@@ -137,6 +124,7 @@ public class FillerAgent : AbstractAgent
             case State.Leaving:
                 if (Arrived())
                 {
+                    OnDespawned?.Invoke(this);
                     DestroyTick();
                     DestroyMove();
                     Destroy(gameObject);
@@ -150,14 +138,16 @@ public class FillerAgent : AbstractAgent
     void HeadToClass()
     {
         _state = State.GoingToClass;
-        _target = nCont.GetRandomPointInRoom(_classroom);
+        _target = nCont.GetScatteredPointNearNode(_classroom);
 
         int destFloor = GetFloorOfRoom(_classroom);
         int curFloor = GetFloorFromPosition(transform.position);
 
         if (destFloor >= 0 && curFloor >= 0 && destFloor != curFloor)
         {
-
+            // No elevator/stairs simulation for fillers — relocate them to
+            // the destination floor directly instead of letting them walk
+            // straight across a floor gap with no collision to stop them.
             var station = System.Array.Find(_callStations, s => s.floorIndex == destFloor);
             Vector3 warpNear = station != null ? station.transform.position : _target;
             if (NavMesh.SamplePosition(warpNear, out NavMeshHit hit, 5f, NavMesh.AllAreas))
@@ -173,7 +163,7 @@ public class FillerAgent : AbstractAgent
     void HeadToExit()
     {
         GameObject exit = nCont.GetRandomExitNode();
-        _target = exit != null ? nCont.GetRandomPointInRoom(exit) : transform.position;
+        _target = exit != null ? nCont.GetScatteredPointNearNode(exit) : transform.position;
 
         int destFloor = exit != null ? GetFloorOfRoom(exit) : -1;
         int curFloor = GetFloorFromPosition(transform.position);
@@ -211,19 +201,27 @@ public class FillerAgent : AbstractAgent
 
     void Move()
     {
-        _movePending = false;
         if (!_moveAlive) return;
+        _movePending = false;
 
         nmAgent.velocity = Vector3.zero;
         Vector3 delta = nmAgent.desiredVelocity * 0.03f;
+
+        // Never step further than the remaining distance to the actual
+        // target — prevents overshoot-then-correct oscillation at close
+        // range, a major contributor to visible spinning.
+        float distToTarget = Vector3.Distance(transform.position, _target);
+        if (delta.magnitude > distToTarget)
+            delta = delta.normalized * distToTarget;
+
         Vector3 nextPos = transform.position + delta;
 
-        // desiredVelocity is horizontal-only, so Y never tracks actual ground
-        // height on its own — resample the NavMesh surface at the new XZ each
-        // tick so the agent doesn't stay pinned at spawn height while walking
-        // over a floor that rises/dips.
+        // desiredVelocity is horizontal-only, so Y never tracks actual
+        // ground height on its own — resample the NavMesh surface each
+        // tick so the agent doesn't stay pinned at spawn height while
+        // walking over a floor that rises/dips.
         if (NavMesh.SamplePosition(nextPos, out NavMeshHit hit, 2f, NavMesh.AllAreas))
-            nextPos.y = hit.position.y + 0.55f;
+            nextPos.y = hit.position.y + 0.6f;
 
         if (delta.sqrMagnitude > 0.0001f) transform.LookAt(nextPos, Vector3.up);
         nmAgent.nextPosition = nextPos;
@@ -236,6 +234,31 @@ public class FillerAgent : AbstractAgent
         foreach (float r in new float[] { 2f, 5f, 10f })
             if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, r, NavMesh.AllAreas))
             { nmAgent.Warp(hit.position); transform.position = hit.position; return; }
+    }
+
+    private int GetFloorOfRoom(GameObject room)
+    {
+        if (room == null || _callStations == null) return -1;
+        float roomY = room.transform.position.y;
+        int best = -1; float bestDist = float.MaxValue;
+        foreach (var s in _callStations)
+        {
+            float d = Mathf.Abs(s.transform.position.y - roomY);
+            if (d < bestDist) { bestDist = d; best = s.floorIndex; }
+        }
+        return best;
+    }
+
+    private int GetFloorFromPosition(Vector3 pos)
+    {
+        if (_callStations == null) return -1;
+        int best = -1; float bestDist = float.MaxValue;
+        foreach (var s in _callStations)
+        {
+            float d = Mathf.Abs(s.transform.position.y - pos.y);
+            if (d < bestDist) { bestDist = d; best = s.floorIndex; }
+        }
+        return best;
     }
 
     private void OnDestroy()

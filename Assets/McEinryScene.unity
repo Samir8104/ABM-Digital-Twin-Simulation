@@ -275556,7 +275556,7 @@ MonoBehaviour:
     m_ColorSpace: -1
     m_NumColorKeys: 2
     m_NumAlphaKeys: 2
-  distToTargetThreshold: 2
+  distToTargetThreshold: 4
   agentLm:
     serializedVersion: 2
     m_Bits: 0
