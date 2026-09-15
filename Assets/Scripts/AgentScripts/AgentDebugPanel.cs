@@ -59,6 +59,9 @@ public class AgentDebugPanel : MonoBehaviour
         if (_currentAgent == null) return;
 
         nameText.text = _currentAgent.name;
+        var health = _currentAgent.GetComponent<AgentHealth>();
+        if (health != null)
+            nameText.text += $" — {(health.IsInfected ? "Infected" : "Healthy")}\nInhaled: {health.InhaledParticles} (infected: {health.InhaledInfectedParticles})";
 
         var schedule = _currentAgent.Schedule;
         if (schedule == null)

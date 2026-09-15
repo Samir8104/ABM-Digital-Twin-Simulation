@@ -14,6 +14,9 @@ public class SimulationFlowController : MonoBehaviour
     [Header("Menu Panel")]
     public GameObject menuPanel;
     public TMP_InputField agentCountField;
+    public TMP_InputField infectedCountField;
+    public int defaultInfectedCount = 1;
+    private bool _starting;
     public TMP_Dropdown diseaseDropdown;
     public Button startButton;
     public int defaultAgentCount = 100;
@@ -23,19 +26,20 @@ public class SimulationFlowController : MonoBehaviour
     public GameObject loadingPanel;
     [Tooltip("The green fill Image. RectTransform: Anchor Min (0,0), Anchor Max (0,1), Pivot (0, 0.5).")]
     public RectTransform loadingBarFill;
-    [Tooltip("The gray track behind it — used to read the full width to fill toward.")]
+    [Tooltip("The gray track behind it â€” used to read the full width to fill toward.")]
     public RectTransform loadingBarBackground;
     public TextMeshProUGUI loadingLabel;
     [Tooltip("How quickly the bar visually catches up to the real load progress. Higher = snappier.")]
     public float barLerpSpeed = 6f;
 
-    [Header("Sim HUD (optional — shown once running)")]
+    [Header("Sim HUD (optional â€” shown once running)")]
     public GameObject simHudPanel;
 
     public static DiseaseProfile ActiveDisease { get; private set; }
     public static int ActiveAgentCount { get; private set; }
+    public static int ActiveInfectedCount { get; private set; }
 
-    // 0..1 — where loading actually is vs. where the bar is currently drawn.
+    // 0..1 â€” where loading actually is vs. where the bar is currently drawn.
     private float _targetProgress = 0f;
     private float _displayedProgress = 0f;
     private bool _barActive = false;
@@ -47,6 +51,7 @@ public class SimulationFlowController : MonoBehaviour
         if (simHudPanel != null) simHudPanel.SetActive(false);
 
         if (agentCountField != null) agentCountField.text = defaultAgentCount.ToString();
+        if (infectedCountField != null) infectedCountField.text = defaultInfectedCount.ToString();
 
         if (diseaseDropdown != null)
         {
@@ -79,7 +84,12 @@ public class SimulationFlowController : MonoBehaviour
 
     private void OnStartPressed()
     {
+        if (_starting) return;
+        _starting = true;
         int selectedCount = ParseAgentCount();
+        int infected = defaultInfectedCount;
+        if (infectedCountField != null && int.TryParse(infectedCountField.text, out int parsed)) infected = parsed;
+        ActiveInfectedCount = Mathf.Clamp(infected, 0, selectedCount);
         int diseaseIndex = Mathf.Clamp(diseaseDropdown != null ? diseaseDropdown.value : 0,
                                         0, DiseaseProfile.Presets.Length - 1);
 
@@ -105,20 +115,23 @@ public class SimulationFlowController : MonoBehaviour
             yield return null;
 
         int requested = Mathf.Min(selectedCount, scheduleManager.AvailableStudentCount);
+        ActiveAgentCount = requested;
+        ActiveInfectedCount = Mathf.Min(ActiveInfectedCount, requested);
+        scheduleManager.initialInfectedCount = ActiveInfectedCount;
 
         _targetProgress = 0f;
         _displayedProgress = 0f;
         _barActive = true;
         ApplyBarWidth(0f);
 
-        if (loadingLabel != null) loadingLabel.text = $"Loading agents… 0 / {requested}";
+        if (loadingLabel != null) loadingLabel.text = $"Loading agentsâ€¦ 0 / {requested}";
 
         bool done = false;
         yield return StartCoroutine(scheduleManager.LoadAgents(
             selectedCount,
             onProgress: (loaded, total) =>
             {
-                if (loadingLabel != null) loadingLabel.text = $"Loading agents… {loaded} / {total}";
+                if (loadingLabel != null) loadingLabel.text = $"Loading agentsâ€¦ {loaded} / {total}";
                 _targetProgress = total > 0 ? (float)loaded / total : 1f;
             },
             onComplete: () => done = true));

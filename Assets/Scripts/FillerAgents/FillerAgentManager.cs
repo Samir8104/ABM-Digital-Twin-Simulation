@@ -135,7 +135,7 @@ public class FillerAgentManager : MonoBehaviour
         GameObject room = nCont.GetRoomByNumber(section.roomNumber);
         if (room == null)
         {
-            Debug.LogWarning($"[FillerAgentManager] No room node for '{section.roomNumber}' — skipping fillers.");
+            Debug.LogWarning($"[FillerAgentManager] No room node for '{section.roomNumber}' â€” skipping fillers.");
             return;
         }
         for(int i = 0; i < count; i++)
@@ -193,6 +193,9 @@ public class FillerAgentManager : MonoBehaviour
           return;
         }
         filler.Setup(section, room, pos, nCont, timeManager, _callStations);
+        var health = go.GetComponent<AgentHealth>();
+        if (health == null) health = go.AddComponent<AgentHealth>();
+        health.ResetForSpawn(false);
 
     }
 

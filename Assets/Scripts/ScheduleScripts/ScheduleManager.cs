@@ -20,6 +20,7 @@ public class ScheduleManager : MonoBehaviour
 
     [Header("Cap (set automatically from the menu's agent-count selection)")]
     public int maxTotalAgents = 0;
+    [Min(0)] public int initialInfectedCount = 1;
 
     [Header("Realism")]
     public int minClassesPerAgent = 1;
@@ -199,12 +200,15 @@ public class ScheduleManager : MonoBehaviour
 
         int count = Mathf.Clamp(requestedCount, 0, _pendingStudents.Count);
         maxTotalAgents = count;
+        int infectedRemaining = Mathf.Clamp(initialInfectedCount, 0, count);
 
         for (int i = 0; i < count; i++)
         {
             var next = _pendingStudents[_pendingCursor];
             _pendingCursor++;
-            SpawnOrReuseAgent(next);
+            bool infected = UnityEngine.Random.Range(0, count - i) < infectedRemaining;
+            if (infected) infectedRemaining--;
+            SpawnOrReuseAgent(next, infected);
             onProgress?.Invoke(i + 1, count);
             yield return null; // spread instantiation across frames
         }
@@ -246,7 +250,7 @@ public class ScheduleManager : MonoBehaviour
         }
     }
 
-    private void SpawnOrReuseAgent(AgentSchedule schedule)
+    private void SpawnOrReuseAgent(AgentSchedule schedule, bool infected = false)
     {
         NavigationAgent agent = GetPooledAgent();
 
@@ -257,6 +261,9 @@ public class ScheduleManager : MonoBehaviour
 
         agent.transform.position = pos;
         agent.AssignNewSchedule(schedule, schedule.GetClassAt(0).ClassroomNode, pos);
+        var health = agent.GetComponent<AgentHealth>();
+        if (health == null) health = agent.gameObject.AddComponent<AgentHealth>();
+        health.ResetForSpawn(infected);
 
         _activeAgents.Add(agent);
     }
