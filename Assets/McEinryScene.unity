@@ -101393,6 +101393,75 @@ MeshCollider:
   m_Convex: 0
   m_CookingOptions: 30
   m_Mesh: {fileID: -4579967923012327292, guid: 85bc0cc5a2e8bcb4092f07103b00b52d, type: 3}
+--- !u!1001 &771663233
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 6148241556649344113, guid: 22b3938432e54fd42821b4c57ca2be54, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 1.0168
+      objectReference: {fileID: 0}
+    - target: {fileID: 6148241556649344113, guid: 22b3938432e54fd42821b4c57ca2be54, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -43.72
+      objectReference: {fileID: 0}
+    - target: {fileID: 6148241556649344113, guid: 22b3938432e54fd42821b4c57ca2be54, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 4.22
+      objectReference: {fileID: 0}
+    - target: {fileID: 6148241556649344113, guid: 22b3938432e54fd42821b4c57ca2be54, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -54.44
+      objectReference: {fileID: 0}
+    - target: {fileID: 6148241556649344113, guid: 22b3938432e54fd42821b4c57ca2be54, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6148241556649344113, guid: 22b3938432e54fd42821b4c57ca2be54, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6148241556649344113, guid: 22b3938432e54fd42821b4c57ca2be54, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6148241556649344113, guid: 22b3938432e54fd42821b4c57ca2be54, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6148241556649344113, guid: 22b3938432e54fd42821b4c57ca2be54, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6148241556649344113, guid: 22b3938432e54fd42821b4c57ca2be54, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6148241556649344113, guid: 22b3938432e54fd42821b4c57ca2be54, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6225997052415967954, guid: 22b3938432e54fd42821b4c57ca2be54, type: 3}
+      propertyPath: loopRecording
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6591821736000824987, guid: 22b3938432e54fd42821b4c57ca2be54, type: 3}
+      propertyPath: showArrows
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8613983576077622694, guid: 22b3938432e54fd42821b4c57ca2be54, type: 3}
+      propertyPath: m_Name
+      value: FirstFloorAirflow
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 22b3938432e54fd42821b4c57ca2be54, type: 3}
 --- !u!1 &771713045 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 3529097106180770532, guid: 85bc0cc5a2e8bcb4092f07103b00b52d, type: 3}
@@ -210341,15 +210410,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a24cc22c191a14343b8aaad528f1d4c8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VelocityFieldVisualizer
-  showArrows: 1
+  showArrows: 0
   toggleKey: 118
-  gridSpacing: 2
-  minSpeedToShow: 0.02
-  arrowScale: 2
-  arrowColor: {r: 0, g: 1, b: 1, a: 1}
+  wispCount: 450
+  trailPoints: 12
+  trailSampleSeconds: 0.08
+  lifetime: 8
   lineWidth: 0.03
-  arrowHeadSize: 0.15
-  lineMaterial: {fileID: 0}
+  lineMaterial: {fileID: 2100000, guid: 21405b1fdc5fd32479be07bc80870b67, type: 2}
 --- !u!114 &1351638514
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -210362,8 +210430,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 87162e62ffa6241aebd829f5e6bffae8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VelocityFieldLoader
+  recordedField: {fileID: -7080759293471039562, guid: b1033999e52b35f40a4e9333f108b878, type: 3}
+  supportRadius: 0.75
+  loopRecording: 0
+  playbackSpeed: 1
+  showAlignmentBounds: 1
   velocityCSVFileName: 
-  caseConfigFileName: mceinry_two_rooms_hallway_draft.json
+  caseConfigFileName: 
   xMin: 0
   yMin: 0
   zMin: 0
@@ -210384,7 +210457,7 @@ Transform:
   m_GameObject: {fileID: 1351638512}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 20.11072, y: 9.55556, z: 13.04768}
+  m_LocalPosition: {x: 0, y: 0, z: -34.4}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -316388,3 +316461,4 @@ SceneRoots:
   - {fileID: 1034242766}
   - {fileID: 1446527362}
   - {fileID: 924091033}
+  - {fileID: 771663233}

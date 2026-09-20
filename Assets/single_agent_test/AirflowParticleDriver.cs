@@ -102,11 +102,8 @@ public class AirflowParticleDriver : MonoBehaviour
         _particles = new ParticleSystem.Particle[_ps.main.maxParticles];
 
         var main = _ps.main;
-        if (main.simulationSpace != ParticleSystemSimulationSpace.World)
-            Debug.LogWarning("[AirflowParticleDriver] Set the Particle System Simulation Space to 'World'.");
-        if (main.gravityModifier.constant != 0f)
-            Debug.LogWarning("[AirflowParticleDriver] Set the Particle System Gravity Modifier to 0 — " +
-                             "this script applies gravity itself, or it will be double-counted.");
+        main.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
+        main.gravityModifier = 0f; // Applied exactly once by this driver.
     }
 
     // Decide ambient-vs-droplet on the first movement frame, NOT in Start().
@@ -129,19 +126,36 @@ public class AirflowParticleDriver : MonoBehaviour
 
     void LateUpdate()
     {
+        var main = _ps.main;
+        AdvanceParticles((main.useUnscaledTime ? Time.unscaledDeltaTime : Time.deltaTime) * main.simulationSpeed);
+    }
+
+    // Unity integrates positions; this step updates the physical velocity once.
+    void AdvanceParticles(float dt)
+    {
         EnsureClassified();
-        if (VelocityFieldLoader.Instance == null) return;
+        if (VelocityFieldLoader.Instance == null || !VelocityFieldLoader.Instance.IsLoaded || _ps.isPaused) return;
+        var main = _ps.main;
+        if (_particles.Length < main.maxParticles) _particles = new ParticleSystem.Particle[main.maxParticles];
+        Transform space = main.simulationSpace == ParticleSystemSimulationSpace.World ? null :
+            (main.simulationSpace == ParticleSystemSimulationSpace.Custom ? main.customSimulationSpace : transform);
 
         int count = _ps.GetParticles(_particles);
-        if (count == 0) return;
+        if (count == 0) { _state.Clear(); return; }
 
-        float dt = Time.deltaTime;
-        float blend = Mathf.Clamp01(dt / relaxationTime);   // ambient path only
+        if (dt <= 0f) return;
+        float blend = 1f - Mathf.Exp(-dt / Mathf.Max(0.001f, relaxationTime));   // ambient path only
         _seenThisFrame.Clear();
 
         for (int i = 0; i < count; i++)
         {
-            Vector3 pos = _particles[i].position;
+            Vector3 pos = space == null ? _particles[i].position : space.TransformPoint(_particles[i].position);
+            // Work in world space; convert back before handing integration to Unity.
+            if (space != null)
+            {
+                _particles[i].position = pos;
+                _particles[i].velocity = space.TransformVector(_particles[i].velocity);
+            }
             Vector3 uFluid = VelocityFieldLoader.Instance.SampleVelocity(pos) * airflowStrength;
 
             // ============================================================
@@ -151,14 +165,18 @@ public class AirflowParticleDriver : MonoBehaviour
             {
                 if (debugPositionMode)
                 {
-                    _particles[i].position = pos + uFluid * dt;
+                    _particles[i].velocity = uFluid;
                 }
                 else
                 {
-                    _particles[i].velocity = Vector3.Lerp(_particles[i].velocity, uFluid, blend);
+                    _particles[i].velocity = Vector3.Lerp(_particles[i].velocity, uFluid + Vector3.down * settlingSpeed, blend);
                     if (diffusionStrength > 0f)
-                        _particles[i].velocity += new Vector3(Gauss(), Gauss(), Gauss()) * diffusionStrength;
-                    _particles[i].velocity += Vector3.down * settlingSpeed * dt;
+                        _particles[i].velocity += new Vector3(Gauss(), Gauss(), Gauss()) * diffusionStrength * Mathf.Sqrt(dt);
+                }
+                if (space != null)
+                {
+                    _particles[i].position = space.InverseTransformPoint(_particles[i].position);
+                    _particles[i].velocity = space.InverseTransformVector(_particles[i].velocity);
                 }
                 continue;
             }
@@ -221,6 +239,11 @@ public class AirflowParticleDriver : MonoBehaviour
             // 7) Optional: shrink the drawn dot to match (scaled up so it's visible).
             if (matchDotSizeToDroplet)
                 _particles[i].startSize = s.diameter * dotSizeScale;
+            if (space != null)
+            {
+                _particles[i].position = space.InverseTransformPoint(_particles[i].position);
+                _particles[i].velocity = space.InverseTransformVector(_particles[i].velocity);
+            }
         }
 
         _ps.SetParticles(_particles, count);

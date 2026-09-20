@@ -6,36 +6,49 @@ using UnityEngine;
 using Newtonsoft.Json.Linq;
 
 /// <summary>
-/// Loads a velocity field for the airflow particle advection system.
-/// Supports two sources — set exactly ONE in the Inspector:
-///
-///   (A) velocityCSVFileName  — actual PINO output (x,y,z,u,v,w per node)
-///   (B) caseConfigFileName   — PINO case config JSON (mceinry_*.json)
-///                              Auto-populates grid bounds and builds a
-///                              synthetic field from ceiling diffuser positions.
-///                              Use this until real PINO inference output exists.
-///
-/// CSV coordinate system:
-///   PINO outputs FEniCS local coords (X=right, Y=forward/floor, Z=up).
-///   Set remapFenicsToUnity = true (default) so the loader converts to
-///   Unity convention (X=right, Y=up, Z=forward) on the way in.
-///   If your generate_airflow_fields.py already remaps, set it false.
-///
-/// JSON coordinate system:
-///   Remap is always applied — the JSON uses FEniCS local coords throughout.
-///
-/// Requires: com.unity.nuget.newtonsoft-json
-///   Window → Package Manager → Add package by name → com.unity.nuget.newtonsoft-json
-///
-/// SETUP:
-///   1. Drop on any persistent GameObject (e.g. GameManager).
-///   2. Set caseConfigFileName = "mceinry_two_rooms_hallway_draft.json" for now.
-///   3. Drop the JSON into Assets/StreamingAssets/.
-///   4. Other scripts call VelocityFieldLoader.Instance.SampleVelocity(worldPos).
-///   5. When PINO CSV is ready, clear caseConfigFileName, set velocityCSVFileName.
+/// Samples imported NPZ recordings in this object's local space. Move, rotate or
+/// scale the object to register the first-floor field with the building. Scaling
+/// maps both positions and velocities consistently. Legacy CSV/JSON is supported
+/// when no recorded field is assigned; those paths retain world-space coordinates.
 /// </summary>
+[DefaultExecutionOrder(-100)]
 public class VelocityFieldLoader : MonoBehaviour
 {
+    [Header("Recorded NPZ (takes priority over legacy sources)")]
+    public RecordedAirflow recordedField;
+    [Tooltip("Distance from mesh nodes beyond which airflow is zero, in source metres.")]
+    public float supportRadius = 0.75f;
+    [Tooltip("Hold the last recorded frame by default; looping introduces a restart at 50 seconds.")]
+    public bool loopRecording = false;
+    public float playbackSpeed = 1f;
+    public float PlaybackTime { get; private set; }
+    public float MaximumSpeed => recordedField != null ? recordedField.maxSpeed : 1f;
+    float nextParticleScan;
+
+    void Update()
+    {
+        if (recordedField == null || !IsLoaded) return;
+        float end = recordedField.times[recordedField.times.Length - 1];
+        float start = recordedField.times[0];
+        PlaybackTime += Time.deltaTime * Mathf.Max(0, playbackSpeed);
+        PlaybackTime = loopRecording && end > start ? start + Mathf.Repeat(PlaybackTime - start, end - start) : Mathf.Min(PlaybackTime, end);
+        // Includes systems spawned later and inactive systems before their first emission.
+        if (Time.unscaledTime >= nextParticleScan)
+        {
+            nextParticleScan = Time.unscaledTime + 0.5f;
+            AttachParticleDrivers();
+        }
+    }
+    void AttachParticleDrivers()
+    {
+        foreach (var ps in FindObjectsByType<ParticleSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            if (ps.GetComponent<AirflowParticleDriver>() == null) ps.gameObject.AddComponent<AirflowParticleDriver>();
+    }
+    void OnDestroy() { if (Instance == this) Instance = null; }
+    [Header("Scene alignment")]
+    [Tooltip("Show the recorded volume in the Scene view, even when this object is not selected.")]
+    public bool showAlignmentBounds = true;
+
     // -----------------------------------------------------------------------
     // Inspector fields
     // -----------------------------------------------------------------------
@@ -109,6 +122,17 @@ public class VelocityFieldLoader : MonoBehaviour
 
     private void Start()
     {
+        if (recordedField != null)
+        {
+            recordedField.Initialize();
+            var bounds = recordedField.bounds;
+            xMin = bounds.min.x; yMin = bounds.min.y; zMin = bounds.min.z;
+            xMax = bounds.max.x; yMax = bounds.max.y; zMax = bounds.max.z;
+            PlaybackTime = recordedField.times[0];
+            IsLoaded = true; IsSynthetic = false;
+            AttachParticleDrivers();
+            return;
+        }
         bool hasJson = !string.IsNullOrWhiteSpace(caseConfigFileName);
         bool hasCsv  = !string.IsNullOrWhiteSpace(velocityCSVFileName);
 
@@ -130,6 +154,7 @@ public class VelocityFieldLoader : MonoBehaviour
     // -----------------------------------------------------------------------
     public void LoadField(string fileName)
     {
+        recordedField = null;
         IsLoaded = false;
         IsSynthetic = false;
         if (fileName.EndsWith(".json"))
@@ -144,7 +169,9 @@ public class VelocityFieldLoader : MonoBehaviour
     // -----------------------------------------------------------------------
     public Vector3 SampleVelocity(Vector3 worldPos)
     {
-        if (!IsLoaded) return Vector3.zero;
+        if (!IsLoaded || !IsInBounds(worldPos)) return Vector3.zero;
+        if (recordedField != null)
+            return transform.TransformVector(recordedField.Sample(transform.InverseTransformPoint(worldPos), PlaybackTime, supportRadius));
 
         int ix = Mathf.Clamp(Mathf.FloorToInt((worldPos.x - xMin) / cellSize), 0, _nx - 1);
         int iy = Mathf.Clamp(Mathf.FloorToInt((worldPos.y - yMin) / cellSize), 0, _ny - 1);
@@ -158,6 +185,7 @@ public class VelocityFieldLoader : MonoBehaviour
     // -----------------------------------------------------------------------
     public bool IsInBounds(Vector3 worldPos)
     {
+        if (recordedField != null) return recordedField.bounds.Contains(transform.InverseTransformPoint(worldPos));
         return worldPos.x >= xMin && worldPos.x <= xMax &&
                worldPos.y >= yMin && worldPos.y <= yMax &&
                worldPos.z >= zMin && worldPos.z <= zMax;

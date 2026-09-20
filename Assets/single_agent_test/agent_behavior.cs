@@ -27,6 +27,8 @@ public class AgentBehaviorController : MonoBehaviour {
             mouthParticles = GetComponentInChildren<ParticleSystem>();
 
         navAgent = GetComponent<NavMeshAgent>();
+        if (mouthParticles != null && mouthParticles.GetComponent<AirflowParticleDriver>() == null)
+            mouthParticles.gameObject.AddComponent<AirflowParticleDriver>();
 
         var main = mouthParticles.main;
         main.simulationSpace     = ParticleSystemSimulationSpace.World;
