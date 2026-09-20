@@ -23,3 +23,18 @@ Transform scaling maps both distances and velocities, keeping travel times consi
 `Tools > Airflow > Validate recorded field` checks dimensions, axes, units, exact node values, interpolation in time, southward flow, bounds, and unsupported mesh gaps. Unity 6000.3.9f1 batch validation passed. A deterministic isolated Unity ParticleSystem simulation test passed 60 motion steps in world/local/custom coordinate spaces, late particle-system registration, and buffer resizing. Full scene visual alignment and appearance still need an in-editor check.
 
 The prefab and scene explicitly reference the wisp material so its shader is included in builds. The wisp color shader uses vertex colors, transparency, and scene depth testing.
+
+## Agent wakes and breathing
+
+Agent prefabs now add their local airflow to the recorded room flow before aerosol drag is evaluated. This makes both ambient particles and exhaled droplets respond. The V-key wisps sample the combined flow as well.
+
+- Walking carries nearby air in the agent's actual travel direction, with a stronger region just behind the body and smooth decay when stopping. Warps do not produce a gust. Influence is local and limited vertically.
+- Breathing alternates between exhaling and inhaling (four-second cycle at rest, with randomized starting phases). Exhalation creates a spreading forward jet and emits particles only during that phase. Inhalation draws nearby particles toward the mouth and emits none. Walking increases breathing frequency and strength.
+- Talking uses the same inhale/exhale cycle with its stronger emission profile. Coughs and sneezes briefly override the cycle with a stronger outward jet, then resume breathing.
+- Existing health/infection particle counters now capture only during inhalation. Particle ownership and infection colors are preserved. The existing health system still determines which particles are consumed; the new local flow does not independently remove/count them.
+
+Tune `AgentBodyWake` on an agent's root: **Strength Multiplier**, **Wake Radius**, **Smoothing** (seconds), **Exhale Reach** (default 1.2 m), and **Inhale Reach** (default 0.55 m). Tune **Breath Period**, **Exhale Fraction**, and **Inhale Speed** on its mouth's `AgentBehaviorController`. Distances are world metres and do not shrink with the mouth object's visual scale. Local agent effects also work outside the recorded first-floor volume; only the recorded building airflow remains confined to that volume.
+
+This is an approximate visual interaction model, not a calibrated respiratory fluid solver. Local wakes/jets have distance falloff but do not raycast through the building's wall geometry. ParticleSystem collision settings continue to handle solid surfaces.
+
+`AgentInteractionValidation.Run` provides isolated batch-editor checks for direction, decay, teleport/pause handling, breathing movement of real ParticleSystems in local/world/custom spaces, ambient tracers, breath/emission phase synchronization, health capture gating, and cough recovery. It then reruns the recorded-field motion checks.

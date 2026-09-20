@@ -134,7 +134,7 @@ public class AirflowParticleDriver : MonoBehaviour
     void AdvanceParticles(float dt)
     {
         EnsureClassified();
-        if (VelocityFieldLoader.Instance == null || !VelocityFieldLoader.Instance.IsLoaded || _ps.isPaused) return;
+        if (_ps.isPaused) return;
         var main = _ps.main;
         if (_particles.Length < main.maxParticles) _particles = new ParticleSystem.Particle[main.maxParticles];
         Transform space = main.simulationSpace == ParticleSystemSimulationSpace.World ? null :
@@ -156,7 +156,9 @@ public class AirflowParticleDriver : MonoBehaviour
                 _particles[i].position = pos;
                 _particles[i].velocity = space.TransformVector(_particles[i].velocity);
             }
-            Vector3 uFluid = VelocityFieldLoader.Instance.SampleVelocity(pos) * airflowStrength;
+            var room = VelocityFieldLoader.Instance;
+            Vector3 uFluid = (room != null && room.IsLoaded ? room.SampleVelocity(pos) * airflowStrength : Vector3.zero)
+                + AgentBodyWake.SampleVelocity(pos);
 
             // ============================================================
             //  AMBIENT TRACERS — unchanged old behaviour

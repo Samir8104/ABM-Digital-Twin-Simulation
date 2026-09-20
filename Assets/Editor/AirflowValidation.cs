@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
@@ -43,7 +44,7 @@ public static class AirflowValidation
             data.velocities = new[] { Vector3.back, Vector3.back, Vector3.back, Vector3.back };
             data.times = new[] { 0f }; data.bounds = new Bounds(Vector3.zero, Vector3.one * 20);
             var loader = root.AddComponent<VelocityFieldLoader>(); loader.recordedField = data; loader.supportRadius = 30;
-            loader.SendMessage("Awake"); loader.SendMessage("Start");
+            Call(loader, "Awake"); Call(loader, "Start");
             for (int space = 0; space < 3; space++)
             {
                 var go = new GameObject("Particle fixture"); go.transform.SetParent(root.transform);
@@ -53,14 +54,14 @@ public static class AirflowValidation
                 main.simulationSpace = (ParticleSystemSimulationSpace)space;
                 if (space == 2) main.customSimulationSpace = go.transform;
                 var emission = ps.emission; emission.enabled = false;
-                loader.SendMessage("AttachParticleDrivers");
+                Call(loader, "AttachParticleDrivers");
                 var driver = ps.GetComponent<AirflowParticleDriver>();
-                Require(driver != null, "New particle system registration"); driver.SendMessage("Awake");
+                Require(driver != null, "New particle system registration"); Call(driver, "Awake");
                 main.maxParticles = 8; // Verify resizing after the driver was created.
                 ps.Play(); ps.Emit(new ParticleSystem.EmitParams { position = Vector3.zero, velocity = Vector3.zero, startLifetime = 10 }, 1);
                 for (int frame = 0; frame < 60; frame++)
                 {
-                    ps.Play(); driver.SendMessage("AdvanceParticles", 1f / 60f);
+                    ps.Play(); Call(driver, "AdvanceParticles", 1f / 60f);
                     ps.Simulate(1f / 60f, false, false, false);
                 }
                 var particles = new ParticleSystem.Particle[8];
@@ -74,6 +75,9 @@ public static class AirflowValidation
         }
         finally { UnityEngine.Object.DestroyImmediate(root); UnityEngine.Object.DestroyImmediate(data); }
     }
+
+    static void Call(object target, string method, params object[] args) =>
+        target.GetType().GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).Invoke(target, args);
 
     static void Require(bool condition, string label)
     { if (!condition) throw new Exception("Airflow validation failed: " + label); }

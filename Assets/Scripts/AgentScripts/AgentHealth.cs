@@ -13,6 +13,7 @@ public class AgentHealth : MonoBehaviour
     public int InhaledInfectedParticles { get; private set; }
 
     private ParticleSystem mouth;
+    private AgentBehaviorController behavior;
     private ParticleSystem.Particle[] particles;
     private Renderer[] bodies;
     private Collider bodyCollider;
@@ -35,7 +36,7 @@ public class AgentHealth : MonoBehaviour
     private void Awake()
     {
         tint = new MaterialPropertyBlock();
-        var behavior = GetComponentInChildren<AgentBehaviorController>(true);
+        behavior = GetComponentInChildren<AgentBehaviorController>(true);
         mouth = behavior != null ? behavior.mouthParticles : null;
         if (mouth == null && behavior != null) mouth = behavior.GetComponent<ParticleSystem>();
         if (mouth == null)
@@ -94,7 +95,8 @@ public class AgentHealth : MonoBehaviour
     }
 
     private bool CanInhale => isActiveAndEnabled && mouth != null &&
-        (bodyCollider == null || bodyCollider.enabled) && (clock == null || clock.IsRunning);
+        (bodyCollider == null || bodyCollider.enabled) && (clock == null || clock.IsRunning) &&
+        (behavior == null || behavior.IsInhaling);
 
     private static Vector3Int Cell(Vector3 p) => new Vector3Int(
         Mathf.FloorToInt(p.x / CellSize), Mathf.FloorToInt(p.y / CellSize), Mathf.FloorToInt(p.z / CellSize));

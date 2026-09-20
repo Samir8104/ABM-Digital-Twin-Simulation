@@ -19,7 +19,7 @@ public class VelocityFieldVisualizer : MonoBehaviour
     Material ownedMaterial;
     GameObject container;
 
-    void Update()
+    void LateUpdate()
     {
         bool toggle = false;
 #if ENABLE_INPUT_SYSTEM
@@ -38,7 +38,7 @@ public class VelocityFieldVisualizer : MonoBehaviour
         foreach (var w in wisps)
         {
             w.age += dt;
-            Vector3 velocity = field.SampleVelocity(w.pos);
+            Vector3 velocity = (field.SampleVelocity(w.pos) + AgentBodyWake.SampleVelocity(w.pos));
             if (w.age > lifetime || !field.IsInBounds(w.pos) || velocity.sqrMagnitude < 1e-8f)
             { Seed(w, field); continue; }
             // Midpoint integration with small steps keeps lines on curved flow paths.
@@ -46,8 +46,9 @@ public class VelocityFieldVisualizer : MonoBehaviour
             while (remaining > 0)
             {
                 float step = Mathf.Min(remaining, 0.02f);
-                velocity = field.SampleVelocity(w.pos);
-                w.pos += field.SampleVelocity(w.pos + velocity * (step * 0.5f)) * step;
+                velocity = (field.SampleVelocity(w.pos) + AgentBodyWake.SampleVelocity(w.pos));
+                Vector3 midpoint = w.pos + velocity * (step * 0.5f);
+                w.pos += (field.SampleVelocity(midpoint) + AgentBodyWake.SampleVelocity(midpoint)) * step;
                 remaining -= step;
             }
             if (!field.IsInBounds(w.pos)) { Seed(w, field); continue; }
