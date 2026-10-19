@@ -1,4 +1,4 @@
-﻿/*
+/*
 This code is licensed under MIT license, Copyright (c) 2019 Kostas Cheliotis
 https://github.com/cheliotk/unity_abm_framework/blob/master/LICENSE
 */
@@ -53,6 +53,7 @@ namespace ABMU
             /// List of steppers flagged to be destroyed during this queue
             /// </summary>
             List<Stepper> steppersDestroyedThisFrame;
+            readonly HashSet<Stepper> destroyedSet = new();
 
             /// <summary>
             /// The current stepper priority value,
@@ -61,6 +62,12 @@ namespace ABMU
             /// Is used to establish proper executino of steppers created this tick 
             /// </summary>
             int currentStepperP = -1;
+            readonly List<KeyValuePair<int, List<Stepper>>> countdownScratch = new();
+            readonly List<Stepper> dueScratch = new();
+            readonly Stack<List<Stepper>> bucketPool = new();
+            readonly List<Stepper.StepperQueueOrder> queueScratch = new();
+            readonly List<int> priorityScratch = new();
+            static readonly Unity.Profiling.ProfilerMarker TickMarker = new("Simulation.Scheduler");
 
             /// <summary>
             /// Constructor method for the Scheduler class
@@ -116,7 +123,7 @@ namespace ABMU
             /// </summary>
             /// <param name="s">The stepper to be removed</param>
             public void DeregisterStepper(Stepper s){
-                steppersDestroyedThisFrame.Add(s);
+                if (s != null && destroyedSet.Add(s)) steppersDestroyedThisFrame.Add(s);
             }
 
             /// <summary>
@@ -124,23 +131,18 @@ namespace ABMU
             /// </summary>
             /// <param name="s">The stepper to be removed from the queue</param>
             void DeregisterDestroyedStepper(Stepper s){
-                UnityEngine.Debug.Log("Stepper: " + s );
                 if (s == null) return;
-                if(s.step == 1){
-                    steppersEveryTick[s.stepperQueue][s.priority].Remove(s);
+                if (s.step == 1)
+                {
+                    if (steppersEveryTick.TryGetValue(s.stepperQueue, out var priorities) &&
+                        priorities.TryGetValue(s.priority, out var list)) list.Remove(s);
                 }
-                else{
-                    Dictionary<int, List<Stepper>> steppersTemp = new Dictionary<int, List<Stepper>>(steppers[s.stepperQueue][s.priority]);
-                    foreach (int k in steppers[s.stepperQueue][s.priority].Keys)
-                    {
-                        if(steppers[s.stepperQueue][s.priority][k].Contains(s)){
-                            steppersTemp[k].Remove(s);                
-                            break;
-                        }
-                    }
-                    steppers[s.stepperQueue][s.priority] = new Dictionary<int, List<Stepper>>(steppersTemp);
+                else if (steppers.TryGetValue(s.stepperQueue, out var priorities) &&
+                         priorities.TryGetValue(s.priority, out var countdowns))
+                {
+                    foreach (var list in countdowns.Values)
+                        if (list.Remove(s)) break;
                 }
-                
             }
 
             /// <summary>
@@ -192,20 +194,20 @@ namespace ABMU
                             steppers_step[s.step-1].Add(s);
                         }
                         else{
-                            steppers_step.Add(s.step-1, new List<Stepper>());
+                            steppers_step.Add(s.step-1, RentBucket());
                             steppers_step[s.step-1].Add(s);
                         }
                     }
                     else{
                         steppers_pval.Add(s.priority, new Dictionary<int, List<Stepper>>());
-                        steppers_pval[s.priority].Add(s.step-1, new List<Stepper>());
+                        steppers_pval[s.priority].Add(s.step-1, RentBucket());
                         steppers_pval[s.priority][s.step-1].Add(s);
                     }
                 }
                 else{
                     steppers.Add(s.stepperQueue, new Dictionary<int, Dictionary<int, List<Stepper>>>());
                     steppers[s.stepperQueue].Add(s.priority, new Dictionary<int, List<Stepper>>());
-                    steppers[s.stepperQueue][s.priority].Add(s.step-1, new List<Stepper>());
+                    steppers[s.stepperQueue][s.priority].Add(s.step-1, RentBucket());
                     steppers[s.stepperQueue][s.priority][s.step-1].Add(s);
                 }
             }
@@ -213,47 +215,28 @@ namespace ABMU
             /// <summary>
             /// Advances the scheduler stepper queue by one tick, moving all currently registered steppers one tick forward, closer to execution
             /// </summary>
-            void AdvanceSchedulerTick(){
-                Dictionary<Stepper.StepperQueueOrder, Dictionary<int, Dictionary<int, List<Stepper>>>> steppersTemp;
-                steppersTemp = new Dictionary<Stepper.StepperQueueOrder, Dictionary<int, Dictionary<int, List<Stepper>>>>(steppers);
-                foreach (var stepperQ in steppers.Keys)
+            List<Stepper> RentBucket() => bucketPool.Count > 0 ? bucketPool.Pop() : new List<Stepper>();
+
+            void AdvanceSchedulerTick()
+            {
+                foreach (var priorities in steppers.Values)
+                foreach (var countdowns in priorities.Values)
                 {
-                    steppersTemp[stepperQ] = new Dictionary<int, Dictionary<int, List<Stepper>>>(steppers[stepperQ]);
-                    foreach (int stepperP in steppers[stepperQ].Keys)
+                    countdownScratch.Clear();
+                    dueScratch.Clear();
+                    foreach (var entry in countdowns) countdownScratch.Add(entry);
+                    countdowns.Clear();
+                    foreach (var entry in countdownScratch)
                     {
-                        int stepper_S = -1;
-                        steppersTemp[stepperQ][stepperP] = new Dictionary<int, List<Stepper>>(steppers[stepperQ][stepperP]);
-                        foreach (int stepperS in steppers[stepperQ][stepperP].Keys)
+                        if (entry.Key == 0 || entry.Value.Count == 0)
                         {
-                            if(steppersTemp[stepperQ][stepperP].ContainsKey(stepperS-1)){
-                                steppersTemp[stepperQ][stepperP][stepperS-1] = steppers[stepperQ][stepperP][stepperS];
-                            }
-                            else{
-                                steppersTemp[stepperQ][stepperP].Add(stepperS-1, steppers[stepperQ][stepperP][stepperS]);
-                            }
-
-                            stepper_S = stepperS;
+                            if (entry.Key == 0) dueScratch.AddRange(entry.Value);
+                            entry.Value.Clear();
+                            bucketPool.Push(entry.Value);
                         }
-                        steppersTemp[stepperQ][stepperP].Remove(stepper_S);
+                        else countdowns.Add(entry.Key - 1, entry.Value);
                     }
-                }
-
-                foreach (var stepperQ in steppersTemp.Keys)
-                {
-                    foreach (int stepperP in steppersTemp[stepperQ].Keys)
-                    {
-                        List<Stepper> steppersAt0 = new List<Stepper>();
-                        steppers[stepperQ][stepperP] = new Dictionary<int, List<Stepper>>(steppersTemp[stepperQ][stepperP]);
-                        
-                        if(steppersTemp[stepperQ][stepperP].ContainsKey(-1)){
-                            steppersAt0 = new List<Stepper>(steppersTemp[stepperQ][stepperP][-1]);
-                            steppers[stepperQ][stepperP].Remove(-1);
-                            foreach (Stepper s in steppersAt0)
-                            {
-                                RegisterFutureStepper(s);
-                            }
-                        }
-                    }
+                    foreach (var s in dueScratch) RegisterFutureStepper(s);
                 }
             }
 
@@ -264,12 +247,14 @@ namespace ABMU
             /// i.e. for steppers with equal priority, all steppers on one agent are executed first before moving to the next agent.
             /// </summary>
             public void Tick(){
+                using var profile = TickMarker.Auto();
                 RegisterSteppersCreated();
                 DeregisterSteppersDestroyed();
 
-                steppersCreatedThisFrame = new List<Stepper>();
-                steppersToRunThisFrame = new List<Stepper>();
-                steppersDestroyedThisFrame = new List<Stepper>();
+                steppersCreatedThisFrame.Clear();
+                steppersToRunThisFrame.Clear();
+                steppersDestroyedThisFrame.Clear();
+                destroyedSet.Clear();
 
                 List<Stepper.StepperQueueOrder> stepperQValsUnique = GetListOfRegisteredStepperQValues();
                 
@@ -284,18 +269,14 @@ namespace ABMU
                     foreach (int stepperP in stepperPValsUnique)
                     {
                         currentStepperP = stepperP;
-                        foreach (Stepper s in steppersToRunThisFrame.FindAll(a => a.priority > prevStepperP && a.priority < stepperP))
-                        {
-                            s.Step();
-                        }
-                        steppersToRunThisFrame = steppersToRunThisFrame.FindAll(a => a.priority >= stepperP);
+                        RunNewSteppers(stepperQ, prevStepperP, stepperP, false);
 
                         if(steppersEveryTick.ContainsKey(stepperQ))
                         {
                             if(steppersEveryTick[stepperQ].ContainsKey(stepperP)){
                                 foreach (Stepper s in steppersEveryTick[stepperQ][stepperP])
                                 {
-                                    if(!steppersDestroyedThisFrame.Contains(s))
+                                    if(!destroyedSet.Contains(s))
                                         s.Step();
                                 }
                             }
@@ -308,27 +289,24 @@ namespace ABMU
 
                                     foreach (Stepper s in steppers[stepperQ][stepperP][0])
                                     {
-                                        if(!steppersDestroyedThisFrame.Contains(s))
+                                        if(!destroyedSet.Contains(s))
                                             s.Step();
                                     }
                                 }
                             }
                         }
 
-                        for (int i = 0; i < steppersToRunThisFrame.FindAll(a => a.priority == stepperP).Count; i++)
-                        {
-                            steppersToRunThisFrame[i].Step();
-                        }
-                        steppersToRunThisFrame = steppersToRunThisFrame.FindAll(a => a.priority != stepperP);
-                        
+                        RunNewSteppers(stepperQ, stepperP, stepperP, true);
+
                         prevStepperP = stepperP;
                     }
                     
                 }
                 steppersToRunThisFrame.Sort((a,b) => a.priority.CompareTo(b.priority));
-                foreach (Stepper s in steppersToRunThisFrame)
+                for (int i = 0; i < steppersToRunThisFrame.Count; i++)
                 {
-                    s.Step();
+                    var s = steppersToRunThisFrame[i];
+                    if (!destroyedSet.Contains(s)) s.Step();
                 }
 
                 currentStepperP = -1;
@@ -339,35 +317,38 @@ namespace ABMU
             /// Get a list of all available stepper queue values currently in the simulation
             /// </summary>
             /// <returns>An ordered Stepper.StepperQueueOrder List of all available stepper queue values</returns>
-            List<Stepper.StepperQueueOrder> GetListOfRegisteredStepperQValues(){
-                List<Stepper.StepperQueueOrder> stepperQVals = new List<Stepper.StepperQueueOrder>(steppers.Keys);
-                stepperQVals.AddRange(steppersEveryTick.Keys);
-                HashSet<Stepper.StepperQueueOrder> stepperQValsUniqueTemp = new HashSet<Stepper.StepperQueueOrder>(stepperQVals);
-                List<Stepper.StepperQueueOrder> stepperQValsUnique = new List<Stepper.StepperQueueOrder>(stepperQValsUniqueTemp);
-                stepperQValsUnique.Sort((a,b) => a.CompareTo(b));
-
-                return stepperQValsUnique;
+            void RunNewSteppers(Stepper.StepperQueueOrder queue, int min, int max, bool exact)
+            {
+                for (int i = 0; i < steppersToRunThisFrame.Count;)
+                {
+                    var s = steppersToRunThisFrame[i];
+                    bool match = s.stepperQueue == queue && (exact ? s.priority == max : s.priority > min && s.priority < max);
+                    if (!match) { i++; continue; }
+                    steppersToRunThisFrame.RemoveAt(i);
+                    if (!destroyedSet.Contains(s)) s.Step();
+                }
             }
 
-            /// <summary>
-            /// Get a list of all available stepper priorities for a given stepper queue value
-            /// </summary>
-            /// <param name="stepperQ">The stepper queue value to check in</param>
-            /// <returns>An ordered int List of all available stepper priority values</returns>
-            List<int> GetListOfRegisteredPriorityValuesAtQ(Stepper.StepperQueueOrder stepperQ){
-                List<int> stepperPVals = new List<int>();
-                    
-                if(steppers.ContainsKey(stepperQ))
-                    stepperPVals.AddRange(steppers[stepperQ].Keys);
-                
-                if(steppersEveryTick.ContainsKey(stepperQ))
-                    stepperPVals.AddRange(steppersEveryTick[stepperQ].Keys);
+            List<Stepper.StepperQueueOrder> GetListOfRegisteredStepperQValues()
+            {
+                queueScratch.Clear();
+                foreach (var q in steppers.Keys) queueScratch.Add(q);
+                foreach (var q in steppersEveryTick.Keys)
+                    if (!queueScratch.Contains(q)) queueScratch.Add(q);
+                queueScratch.Sort();
+                return queueScratch;
+            }
 
-                HashSet<int> stepperPValsUniqueTemp = new HashSet<int>(stepperPVals);
-                List<int> stepperPValsUnique = new List<int>(stepperPValsUniqueTemp);
-                stepperPValsUnique.Sort((a,b) => a.CompareTo(b));
-
-                return stepperPValsUnique;
+            List<int> GetListOfRegisteredPriorityValuesAtQ(Stepper.StepperQueueOrder queue)
+            {
+                priorityScratch.Clear();
+                if (steppers.TryGetValue(queue, out var scheduled))
+                    foreach (var p in scheduled.Keys) priorityScratch.Add(p);
+                if (steppersEveryTick.TryGetValue(queue, out var everyTick))
+                    foreach (var p in everyTick.Keys)
+                        if (!priorityScratch.Contains(p)) priorityScratch.Add(p);
+                priorityScratch.Sort();
+                return priorityScratch;
             }
         }
     }

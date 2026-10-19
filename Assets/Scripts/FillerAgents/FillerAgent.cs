@@ -133,12 +133,15 @@ public class FillerAgent : AbstractAgent
         }
     }
 
-    bool Arrived() => Vector3.Distance(transform.position, _target) < nCont.distToTargetThreshold;
+    bool Arrived() => _state == State.GoingToClass
+        ? nCont.HasArrivedInClassroom(nmAgent, transform.position, _target)
+        : Vector3.Distance(transform.position, _target) < nCont.distToTargetThreshold;
 
     void HeadToClass()
     {
         _state = State.GoingToClass;
-        _target = nCont.GetScatteredPointNearNode(_classroom);
+        _target = nCont.GetClassroomTarget(_classroom);
+        nmAgent.stoppingDistance = nCont.classroomArrivalDistance * 0.5f;
 
         int destFloor = GetFloorOfRoom(_classroom);
         int curFloor = GetFloorFromPosition(transform.position);
@@ -180,6 +183,7 @@ public class FillerAgent : AbstractAgent
         }
 
         _state = State.Leaving;
+        nmAgent.stoppingDistance = Mathf.Max(0.5f, nCont.distToTargetThreshold * 0.6f);
         StartMoving();
     }
 

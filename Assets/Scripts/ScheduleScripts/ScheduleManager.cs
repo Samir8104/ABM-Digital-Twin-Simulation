@@ -201,6 +201,12 @@ public class ScheduleManager : MonoBehaviour
         int count = Mathf.Clamp(requestedCount, 0, _pendingStudents.Count);
         maxTotalAgents = count;
         int infectedRemaining = Mathf.Clamp(initialInfectedCount, 0, count);
+        if (count == 0)
+        {
+            onProgress?.Invoke(0, 0);
+            onComplete?.Invoke();
+            yield break; // A zero-agent run must not start the unlimited-capacity refill loop.
+        }
 
         for (int i = 0; i < count; i++)
         {
@@ -252,12 +258,11 @@ public class ScheduleManager : MonoBehaviour
 
     private void SpawnOrReuseAgent(AgentSchedule schedule, bool infected = false)
     {
-        NavigationAgent agent = GetPooledAgent();
-
         Transform spawnOrigin = (exitNodes != null && exitNodes.Count > 0)
             ? exitNodes[UnityEngine.Random.Range(0, exitNodes.Count)].transform
             : spawnRoot;
         Vector3 pos = GetNavMeshSpawnPoint(spawnOrigin.position);
+        NavigationAgent agent = GetPooledAgent(pos);
 
         agent.transform.position = pos;
         agent.AssignNewSchedule(schedule, schedule.GetClassAt(0).ClassroomNode, pos);
@@ -271,7 +276,7 @@ public class ScheduleManager : MonoBehaviour
 
     
 
-    private NavigationAgent GetPooledAgent()
+    private NavigationAgent GetPooledAgent(Vector3 spawnPosition)
     {
         for (int i = 0; i < _agentPool.Count; i++)
         {
@@ -280,7 +285,8 @@ public class ScheduleManager : MonoBehaviour
                 return a;
         }
 
-        GameObject go = Instantiate(agentPrefab, spawnRoot.position, Quaternion.identity);
+        // NavMeshAgent binds during Instantiate, before AssignNewSchedule can warp it.
+        GameObject go = Instantiate(agentPrefab, spawnPosition, Quaternion.identity);
         go.name = $"Agent_{_agentPool.Count:0000}";
         var agent = go.GetComponent<NavigationAgent>();
         if (agent == null)

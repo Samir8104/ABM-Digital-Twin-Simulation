@@ -101,7 +101,7 @@ public class AgentDebugPanel : MonoBehaviour
             string days = GetMeetingDaysString(entry.Section);
 
             string line = $"  {startStr} - {endStr}  Room {entry.Section.roomNumber}  [{days}]";
-            if (isActive) line = $"<b><color=#FFD24A>{line}  ? ACTIVE</color></b>";
+            if (isActive) line = $"<b><color=#FFD24A>{line}  ACTIVE</color></b>";
 
             sb.AppendLine(line);
         }

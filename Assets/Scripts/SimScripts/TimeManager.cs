@@ -17,11 +17,14 @@ public class TimeManager : MonoBehaviour
     public int startHour;
     public int endHour;
     public int simMinute;
+    public double ElapsedSimulationSeconds { get; private set; }
     public int CurrentDay { get; private set; } = 1;
     public int CurrentHour { get; private set; } = 8;
     public int CurrentMinute { get; private set; }
     public enum DayOfWeek { Monday, Tuesday, Wednesday, Thursday, Friday }
     private bool isAm = true;
+    private int displayedDay = -1, displayedHour = -1, displayedMinute = -1;
+    private bool displayedAm;
     public event Action<float> OnSimSpeedChanged;
 
     // ?? Sim lifecycle ?????????????????????????????????????????????????????????
@@ -62,7 +65,9 @@ public class TimeManager : MonoBehaviour
     {
         if (!IsRunning) return; // clock frozen pre-start; nothing to update
 
-        _currentTime += Time.deltaTime * timeMultipler;
+        float step = Mathf.Max(0, Time.deltaTime * timeMultipler);
+        ElapsedSimulationSeconds += step;
+        _currentTime += step;
         CurrentHour = (Mathf.FloorToInt(_currentTime / 3600f) % 24) + startHour;
         CurrentMinute = Mathf.FloorToInt((_currentTime % 3600f) / 60f);
         simMinute = CurrentHour * 60 + CurrentMinute;
@@ -80,6 +85,10 @@ public class TimeManager : MonoBehaviour
     private void UpdateUI()
     {
         if (timeText == null) return;
+        if (displayedDay == CurrentDay && displayedHour == CurrentHour &&
+            displayedMinute == CurrentMinute && displayedAm == isAm) return;
+        displayedDay = CurrentDay; displayedHour = CurrentHour;
+        displayedMinute = CurrentMinute; displayedAm = isAm;
         int displayHour = CurrentHour;
         string suffix = isAm ? "AM" : "PM";
         if (!isAm && displayHour != 12) displayHour -= 12;

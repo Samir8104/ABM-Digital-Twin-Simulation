@@ -210380,89 +210380,6 @@ MeshCollider:
   m_Convex: 0
   m_CookingOptions: 30
   m_Mesh: {fileID: -1032574278138916149, guid: 85bc0cc5a2e8bcb4092f07103b00b52d, type: 3}
---- !u!1 &1351638512
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1351638515}
-  - component: {fileID: 1351638514}
-  - component: {fileID: 1351638513}
-  m_Layer: 0
-  m_Name: airflowManager
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1351638513
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1351638512}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a24cc22c191a14343b8aaad528f1d4c8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::VelocityFieldVisualizer
-  showArrows: 0
-  toggleKey: 118
-  wispCount: 450
-  trailPoints: 12
-  trailSampleSeconds: 0.08
-  lifetime: 8
-  lineWidth: 0.03
-  lineMaterial: {fileID: 2100000, guid: 21405b1fdc5fd32479be07bc80870b67, type: 2}
---- !u!114 &1351638514
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1351638512}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 87162e62ffa6241aebd829f5e6bffae8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::VelocityFieldLoader
-  recordedField: {fileID: -7080759293471039562, guid: b1033999e52b35f40a4e9333f108b878, type: 3}
-  supportRadius: 0.75
-  loopRecording: 0
-  playbackSpeed: 1
-  showAlignmentBounds: 1
-  velocityCSVFileName: 
-  caseConfigFileName: 
-  xMin: 0
-  yMin: 0
-  zMin: 0
-  xMax: 8.95
-  yMax: 4.308
-  zMax: 6.45
-  cellSize: 0.75
-  remapFenicsToUnity: 1
-  inletJetSpeedOverride: 0
-  jetSigma: 0.5
-  logOnLoad: 1
---- !u!4 &1351638515
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1351638512}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: -34.4}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1351696421 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 839927697876948606, guid: 85bc0cc5a2e8bcb4092f07103b00b52d, type: 3}
@@ -222433,6 +222350,13 @@ MonoBehaviour:
   startButton: {fileID: 1624745315}
   defaultAgentCount: 100
   maxAgentCountAllowed: 1000
+  agentToggle: {fileID: 0}
+  defaultAgentsEnabled: 1
+  particleToggle: {fileID: 0}
+  defaultParticlesEnabled: 1
+  runWithoutRendering: 0
+  recordCsv: 1
+  recordingIntervalSeconds: 1
   loadingPanel: {fileID: 443748091}
   loadingBarFill: {fileID: 549248119}
   loadingBarBackground: {fileID: 1981413215}
@@ -276296,6 +276220,8 @@ MonoBehaviour:
     m_NumColorKeys: 2
     m_NumAlphaKeys: 2
   distToTargetThreshold: 4
+  classroomArrivalDistance: 0.45
+  classroomScatterRadius: 2
   agentLm:
     serializedVersion: 2
     m_Bits: 0
@@ -316457,7 +316383,6 @@ SceneRoots:
   - {fileID: 986462162}
   - {fileID: 1498574435}
   - {fileID: 221788250}
-  - {fileID: 1351638515}
   - {fileID: 1034242766}
   - {fileID: 1446527362}
   - {fileID: 924091033}

@@ -39,7 +39,8 @@ public class ElevatorCallStation : MonoBehaviour
                             "This station will never be usable.", this);
             return false;
         }
-        return !elevatorController.IsFull && _waitingAgents.Count < maxWaitingAgents;
+        return elevatorController.isActiveAndEnabled && elevatorController.IsValidFloor(floorIndex) &&
+            !elevatorController.IsFull && _waitingAgents.Count < maxWaitingAgents;
     }
 
     /// <summary>
@@ -48,13 +49,16 @@ public class ElevatorCallStation : MonoBehaviour
     /// </summary>
     public bool TryRegisterWaitingAgent(NavigationAgent agent, int destinationFloor)
     {
+        if (agent == null || elevatorController == null || destinationFloor == floorIndex ||
+            !elevatorController.IsValidFloor(destinationFloor)) return false;
+        if (_waitingAgents.Contains(agent)) return true;
         // Second gate — queue may have filled while the agent was walking here
         if (!IsElevatorViable())
             return false;
 
         _waitingAgents.Enqueue(agent);
-        elevatorController.RequestFloor(floorIndex);
-        elevatorController.RequestFloor(destinationFloor);
+        if (elevatorController.CanBoardAt(floorIndex)) OnElevatorArrived();
+        else elevatorController.RequestFloor(floorIndex);
         return true;
     }
 
@@ -64,9 +68,11 @@ public class ElevatorCallStation : MonoBehaviour
     /// </summary>
     public void OnElevatorArrived()
     {
+        if (elevatorController == null || !elevatorController.CanBoardAt(floorIndex)) return;
         while (_waitingAgents.Count > 0 && !elevatorController.IsFull)
         {
             NavigationAgent agent = _waitingAgents.Dequeue();
+            if (agent == null || !agent.isActiveAndEnabled) continue;
             agent.BoardElevator(elevatorController);
         }
     }

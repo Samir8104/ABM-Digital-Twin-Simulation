@@ -27,17 +27,27 @@ public class AgentBodyWake : MonoBehaviour
     Vector3 bodyPosition;
     Vector3 mouthPosition;
     Vector3 mouthForward;
+    Vector3 wakeOffset, wakeVelocity;
+    float inverseWakeRadiusSquared;
+    Bounds influenceBounds;
+    Vector3 influenceMin, influenceMax;
+    NavigationAgent navigation;
+    bool IsPresent => navigation == null || navigation.Schedule == null ||
+        (navigation.Schedule.CurrentActivity != AgentActivity.Idle && navigation.Schedule.CurrentActivity != AgentActivity.OffCampus &&
+         navigation.Schedule.CurrentActivity != AgentActivity.Done);
 
     const float CellSize = 4f;
     static readonly List<AgentBodyWake> sources = new List<AgentBodyWake>();
     static readonly Dictionary<Vector3Int, List<AgentBodyWake>> grid = new Dictionary<Vector3Int, List<AgentBodyWake>>();
     static readonly Stack<List<AgentBodyWake>> pool = new Stack<List<AgentBodyWake>>();
     static int gridFrame = -1;
+    static readonly Unity.Profiling.ProfilerMarker SampleMarker = new("Simulation.BodyWake");
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetStatics() { sources.Clear(); grid.Clear(); pool.Clear(); gridFrame = -1; }
     void OnEnable()
     {
+        navigation = GetComponent<NavigationAgent>();
         lastPosition = transform.position; WalkingVelocity = Vector3.zero; BreathVelocity = 0;
         if (!sources.Contains(this)) sources.Add(this);
         CachePose(); gridFrame = -1;
@@ -46,6 +56,14 @@ public class AgentBodyWake : MonoBehaviour
     void LateUpdate() { AdvanceWake(Time.deltaTime); }
     void AdvanceWake(float dt)
     {
+        if (!ParticleSimulationSettings.IsSimulating || !IsPresent)
+        {
+            lastPosition = transform.position;
+            WalkingVelocity = Vector3.zero;
+            BreathVelocity = 0;
+            CachePose(); gridFrame = -1;
+            return;
+        }
         Vector3 delta = transform.position - lastPosition;
         lastPosition = transform.position;
         if (dt > 0)
@@ -67,6 +85,16 @@ public class AgentBodyWake : MonoBehaviour
         bodyPosition = transform.position + Vector3.up * bodyHeight;
         mouthPosition = mouth != null ? mouth.position : transform.position + Vector3.up * 1.6f;
         mouthForward = mouth != null ? mouth.forward : transform.forward;
+        wakeOffset = WalkingVelocity.normalized * (wakeRadius * 0.35f);
+        wakeVelocity = WalkingVelocity * Mathf.Clamp01(strengthMultiplier * 0.12f);
+        float radius = Mathf.Max(0.1f, wakeRadius);
+        inverseWakeRadiusSquared = 1f / (radius * radius);
+        float reach = Mathf.Max(wakeRadius * 1.35f, 0.9f);
+        influenceBounds = new Bounds(bodyPosition, Vector3.one * reach * 2);
+        float breathReach = Mathf.Max(exhaleReach, inhaleReach);
+        influenceBounds.Encapsulate(mouthPosition + Vector3.one * breathReach);
+        influenceBounds.Encapsulate(mouthPosition - Vector3.one * breathReach);
+        influenceMin = influenceBounds.min; influenceMax = influenceBounds.max;
     }
     public void SetBreath(float signedSpeed)
     {
@@ -75,15 +103,19 @@ public class AgentBodyWake : MonoBehaviour
     }
     public Vector3 SampleLocalVelocity(Vector3 worldPosition)
     {
-        Vector3 offset = worldPosition - bodyPosition;
-        // Centre the moving air slightly behind the agent; preserve travel direction.
-        offset += WalkingVelocity.normalized * (wakeRadius * 0.35f);
-        float radius = Mathf.Max(0.1f, wakeRadius);
-        float d2 = (offset.x * offset.x + offset.z * offset.z) / (radius * radius) + offset.y * offset.y / (0.9f * 0.9f);
-        float falloff = Mathf.Max(0f, 1f - d2);
-        Vector3 velocity = WalkingVelocity * (Mathf.Clamp01(strengthMultiplier * 0.12f) * falloff * falloff);
-        offset = worldPosition - mouthPosition;
-        float distance = offset.magnitude;
+        // Reject distant bodies before cone projection, normalization and falloff math.
+        if (worldPosition.x < influenceMin.x || worldPosition.x > influenceMax.x ||
+            worldPosition.y < influenceMin.y || worldPosition.y > influenceMax.y ||
+            worldPosition.z < influenceMin.z || worldPosition.z > influenceMax.z) return Vector3.zero;
+        Vector3 velocity = Vector3.zero;
+        if (wakeVelocity.sqrMagnitude > 0f)
+        {
+            Vector3 bodyOffset = worldPosition - bodyPosition + wakeOffset;
+            float d2 = (bodyOffset.x * bodyOffset.x + bodyOffset.z * bodyOffset.z) * inverseWakeRadiusSquared + bodyOffset.y * bodyOffset.y / (0.9f * 0.9f);
+            float falloff = Mathf.Max(0f, 1f - d2);
+            velocity = wakeVelocity * (falloff * falloff);
+        }
+        Vector3 offset = worldPosition - mouthPosition;
         float forward = Vector3.Dot(offset, mouthForward);
         if (BreathVelocity > 0 && forward >= -0.025f && forward < exhaleReach)
         {
@@ -91,12 +123,16 @@ public class AgentBodyWake : MonoBehaviour
             float spread = 0.06f + axial * 0.3f;
             float lateral2 = Mathf.Max(0, offset.sqrMagnitude - forward * forward);
             float radial = Mathf.Max(0, 1f - lateral2 / (spread * spread));
-            float along = Mathf.Clamp01(1f - axial / Mathf.Max(0.1f, exhaleReach));
-            Vector3 direction = (mouthForward + Vector3.ProjectOnPlane(offset, mouthForward) * 0.4f).normalized;
-            velocity += direction * (BreathVelocity * radial * radial * along * along / (1f + 2f * axial));
+            if (radial > 0f)
+            {
+                float along = Mathf.Clamp01(1f - axial / Mathf.Max(0.1f, exhaleReach));
+                Vector3 direction = (mouthForward + Vector3.ProjectOnPlane(offset, mouthForward) * 0.4f).normalized;
+                velocity += direction * (BreathVelocity * radial * radial * along * along / (1f + 2f * axial));
+            }
         }
-        else if (BreathVelocity < 0 && distance < inhaleReach && forward >= -0.04f)
+        else if (BreathVelocity < 0 && inhaleReach > 0 && offset.sqrMagnitude < inhaleReach * inhaleReach && forward >= -0.04f)
         {
+            float distance = offset.magnitude;
             float inward = Mathf.Clamp01(1f - distance / Mathf.Max(0.1f, inhaleReach));
             velocity -= offset / Mathf.Max(distance, 0.015f) * (-BreathVelocity * inward * inward);
         }
@@ -111,12 +147,9 @@ public class AgentBodyWake : MonoBehaviour
         grid.Clear();
         foreach (var source in sources)
         {
-            if (source == null || !source.isActiveAndEnabled) continue;
-            float radius = Mathf.Max(source.wakeRadius * 1.35f, 0.9f);
-            var bounds = new Bounds(source.bodyPosition, Vector3.one * radius * 2);
-            float breathRadius = Mathf.Max(source.exhaleReach, source.inhaleReach);
-            bounds.Encapsulate(source.mouthPosition + Vector3.one * breathRadius);
-            bounds.Encapsulate(source.mouthPosition - Vector3.one * breathRadius);
+            if (source == null || !source.isActiveAndEnabled || !source.IsPresent ||
+                (source.wakeVelocity.sqrMagnitude == 0f && source.BreathVelocity == 0f)) continue;
+            var bounds = source.influenceBounds;
             Vector3Int min = Cell(bounds.min), max = Cell(bounds.max);
             for (int x = min.x; x <= max.x; x++)
             for (int y = min.y; y <= max.y; y++)
@@ -130,6 +163,7 @@ public class AgentBodyWake : MonoBehaviour
     }
     public static Vector3 SampleVelocity(Vector3 position)
     {
+        using var profile = SampleMarker.Auto();
         BuildGrid();
         Vector3 velocity = Vector3.zero;
         if (grid.TryGetValue(Cell(position), out var bucket))

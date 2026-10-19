@@ -26,13 +26,19 @@ public class AgentBehaviorController : MonoBehaviour
     bool isBursting;
     float nextSneezeTime, nextCoughTime, phase, burstRemaining, burstSpeed;
     NavMeshAgent navAgent;
+    NavigationAgent navigation;
     AgentBodyWake wake;
+    bool CanEmit => ParticleSimulationSettings.IsSimulating && (navigation == null || navigation.Schedule == null ||
+        (navigation.Schedule.CurrentActivity != AgentActivity.Idle && navigation.Schedule.CurrentActivity != AgentActivity.OffCampus &&
+         navigation.Schedule.CurrentActivity != AgentActivity.Done));
 
     void Awake()
     {
         if (mouthParticles == null) mouthParticles = GetComponentInChildren<ParticleSystem>();
         if (mouthParticles == null) { Debug.LogWarning("Breathing requires a mouth ParticleSystem.", this); enabled = false; return; }
         navAgent = GetComponentInParent<NavMeshAgent>();
+        navigation = GetComponentInParent<NavigationAgent>();
+        ParticleSimulationSettings.Register(mouthParticles);
         wake = GetComponentInParent<AgentBodyWake>();
         if (wake == null) wake = (navAgent != null ? navAgent.gameObject : gameObject).AddComponent<AgentBodyWake>();
         wake.mouth = mouthParticles.transform;
@@ -58,6 +64,13 @@ public class AgentBehaviorController : MonoBehaviour
     }
     void Update()
     {
+        if (!CanEmit)
+        {
+            var emission = mouthParticles.emission;
+            emission.enabled = false;
+            if (wake != null) wake.SetBreath(0);
+            return;
+        }
         if (Time.time >= nextSneezeTime) { Sneeze(); nextSneezeTime = Time.time + SampleExponential(sneezesPerHour); }
         if (Time.time >= nextCoughTime) { Cough(); nextCoughTime = Time.time + SampleExponential(coughsPerHour); }
         AdvanceRespiration(Time.deltaTime);
@@ -85,6 +98,7 @@ public class AgentBehaviorController : MonoBehaviour
     void AdvanceRespiration(float dt)
     {
         if (mouthParticles == null || wake == null) return;
+        if (!CanEmit) { wake.SetBreath(0); return; }
         if (isBursting)
         {
             float consumed = Mathf.Min(Mathf.Max(0, dt), burstRemaining);
@@ -112,6 +126,7 @@ public class AgentBehaviorController : MonoBehaviour
     public void Cough() { Burst(EmissionProfiles.Coughing); }
     void Burst(BehaviorEmissionProfile profile)
     {
+        if (!CanEmit) return;
         if (mouthParticles == null || wake == null) return;
         isBursting = true; burstRemaining = 1; burstSpeed = profile.initialSpeed;
         ApplyProfile(profile);
@@ -125,7 +140,7 @@ public class AgentBehaviorController : MonoBehaviour
     {
         isBursting = false;
         ApplyProfile(isTalking ? EmissionProfiles.Talking : EmissionProfiles.Breathing);
-        mouthParticles.Play();
+        if (CanEmit) mouthParticles.Play();
     }
     float SampleExponential(float eventsPerHour) => eventsPerHour <= 0 ? float.PositiveInfinity :
         -Mathf.Log(Mathf.Max(Random.value, 1e-7f)) / (eventsPerHour / 3600f);

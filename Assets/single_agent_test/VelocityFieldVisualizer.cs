@@ -13,6 +13,8 @@ public class VelocityFieldVisualizer : MonoBehaviour
     public float trailSampleSeconds = 0.08f;
     public float lifetime = 8f;
     public float lineWidth = 0.025f;
+    [Tooltip("Maximum integration steps per wisp per frame. Bounds decorative work when FPS drops.")]
+    [Range(1, 8)] public int maxIntegrationSteps = 4;
     public Material lineMaterial;
     class Wisp { public LineRenderer line; public Vector3 pos; public Vector3[] path; public float age, clock; public int count; }
     Wisp[] wisps;
@@ -21,6 +23,11 @@ public class VelocityFieldVisualizer : MonoBehaviour
 
     void LateUpdate()
     {
+        if (SimulationFlowController.RenderingDisabled)
+        {
+            if (container != null) container.SetActive(false);
+            return;
+        }
         bool toggle = false;
 #if ENABLE_INPUT_SYSTEM
         toggle = Keyboard.current != null && Keyboard.current.vKey.wasPressedThisFrame;
@@ -42,14 +49,13 @@ public class VelocityFieldVisualizer : MonoBehaviour
             if (w.age > lifetime || !field.IsInBounds(w.pos) || velocity.sqrMagnitude < 1e-8f)
             { Seed(w, field); continue; }
             // Midpoint integration with small steps keeps lines on curved flow paths.
-            float remaining = dt;
-            while (remaining > 0)
+            int steps = Mathf.Clamp(Mathf.CeilToInt(dt / 0.02f), 1, Mathf.Max(1, maxIntegrationSteps));
+            float step = Mathf.Min(dt, 0.1f) / steps;
+            for (int integration = 0; integration < steps; integration++)
             {
-                float step = Mathf.Min(remaining, 0.02f);
                 velocity = (field.SampleVelocity(w.pos) + AgentBodyWake.SampleVelocity(w.pos));
                 Vector3 midpoint = w.pos + velocity * (step * 0.5f);
                 w.pos += (field.SampleVelocity(midpoint) + AgentBodyWake.SampleVelocity(midpoint)) * step;
-                remaining -= step;
             }
             if (!field.IsInBounds(w.pos)) { Seed(w, field); continue; }
             w.clock += dt;

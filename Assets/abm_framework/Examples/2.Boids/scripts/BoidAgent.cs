@@ -1,4 +1,4 @@
-﻿/*
+/*
 Boids - Flocking behavior simulation.
 
 Copyright (C) 2014 Keijiro Takahashi
@@ -24,7 +24,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 using UnityEngine;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 
 using ABMU.Core;
 
@@ -63,6 +65,7 @@ public class BoidAgent : AbstractAgent
     void BoidBehaviourFindNeighbours(){
         // Looks up nearby boids.
         nearbyBoids = Physics.OverlapSphere(this.transform.position, boidController.neighborDist, boidController.searchLayer);
+        #if UNITY_EDITOR
         if(Selection.Contains(this.gameObject)){
             for (int i = 0; i < nearbyBoids.Length; i++)
             {
@@ -70,6 +73,7 @@ public class BoidAgent : AbstractAgent
                 Debug.DrawLine(this.transform.position, p, Color.cyan);
             }
         }
+        #endif
     }
 
     void BoidBehaviourMove(){

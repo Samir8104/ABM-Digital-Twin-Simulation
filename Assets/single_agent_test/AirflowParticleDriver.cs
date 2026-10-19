@@ -87,6 +87,7 @@ public class AirflowParticleDriver : MonoBehaviour
     // Unity plumbing
     ParticleSystem _ps;
     ParticleSystem.Particle[] _particles;
+    Vector3[] _worldPositions, _fieldVelocities;
 
     // Per-particle memory. Each live droplet remembers its CURRENT and ORIGINAL
     // diameter, keyed by the particle's randomSeed (stable for the particle's life).
@@ -95,6 +96,7 @@ public class AirflowParticleDriver : MonoBehaviour
     Dictionary<uint, DropletState> _state = new Dictionary<uint, DropletState>();
     HashSet<uint> _seenThisFrame = new HashSet<uint>();
     List<uint> _toRemove = new List<uint>();
+    static readonly Unity.Profiling.ProfilerMarker AdvanceMarker = new("Simulation.ParticlePhysics");
 
     void Awake()
     {
@@ -104,6 +106,7 @@ public class AirflowParticleDriver : MonoBehaviour
         var main = _ps.main;
         main.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
         main.gravityModifier = 0f; // Applied exactly once by this driver.
+        ParticleSimulationSettings.Register(_ps);
     }
 
     // Decide ambient-vs-droplet on the first movement frame, NOT in Start().
@@ -121,7 +124,6 @@ public class AirflowParticleDriver : MonoBehaviour
             _ambientMode = true;
             relaxationTime = marker.Tau;
         }
-        Debug.Log($"[AirflowParticleDriver] '{name}' mode = {(_ambientMode ? "ambient tracer" : "droplet physics")}");
     }
 
     void LateUpdate()
@@ -133,8 +135,10 @@ public class AirflowParticleDriver : MonoBehaviour
     // Unity integrates positions; this step updates the physical velocity once.
     void AdvanceParticles(float dt)
     {
+        if (!ParticleSimulationSettings.IsSimulating) { _state.Clear(); return; }
+        using var profile = AdvanceMarker.Auto();
         EnsureClassified();
-        if (_ps.isPaused) return;
+        if (_ps.isPaused || dt <= 0f) return;
         var main = _ps.main;
         if (_particles.Length < main.maxParticles) _particles = new ParticleSystem.Particle[main.maxParticles];
         Transform space = main.simulationSpace == ParticleSystemSimulationSpace.World ? null :
@@ -143,21 +147,30 @@ public class AirflowParticleDriver : MonoBehaviour
         int count = _ps.GetParticles(_particles);
         if (count == 0) { _state.Clear(); return; }
 
-        if (dt <= 0f) return;
         float blend = 1f - Mathf.Exp(-dt / Mathf.Max(0.001f, relaxationTime));   // ambient path only
+        float ambientJitter = diffusionStrength * Mathf.Sqrt(dt);
+        Vector3 gEff = gravity * (1f - airDensity / dropletDensity);
+        var room = VelocityFieldLoader.Instance;
+        bool hasRoom = room != null && room.IsLoaded;
+        Matrix4x4 toWorld = space == null ? Matrix4x4.identity : space.localToWorldMatrix;
+        Matrix4x4 toLocal = space == null ? Matrix4x4.identity : space.worldToLocalMatrix;
+        if (_worldPositions == null || _worldPositions.Length < count)
+        { _worldPositions = new Vector3[_particles.Length]; _fieldVelocities = new Vector3[_particles.Length]; }
+        for (int i = 0; i < count; i++)
+            _worldPositions[i] = space == null ? _particles[i].position : toWorld.MultiplyPoint3x4(_particles[i].position);
+        if (hasRoom) room.SampleVelocities(_worldPositions, _fieldVelocities, count);
         _seenThisFrame.Clear();
 
         for (int i = 0; i < count; i++)
         {
-            Vector3 pos = space == null ? _particles[i].position : space.TransformPoint(_particles[i].position);
+            Vector3 pos = _worldPositions[i];
             // Work in world space; convert back before handing integration to Unity.
             if (space != null)
             {
                 _particles[i].position = pos;
-                _particles[i].velocity = space.TransformVector(_particles[i].velocity);
+                _particles[i].velocity = toWorld.MultiplyVector(_particles[i].velocity);
             }
-            var room = VelocityFieldLoader.Instance;
-            Vector3 uFluid = (room != null && room.IsLoaded ? room.SampleVelocity(pos) * airflowStrength : Vector3.zero)
+            Vector3 uFluid = (hasRoom ? _fieldVelocities[i] * airflowStrength : Vector3.zero)
                 + AgentBodyWake.SampleVelocity(pos);
 
             // ============================================================
@@ -173,12 +186,12 @@ public class AirflowParticleDriver : MonoBehaviour
                 {
                     _particles[i].velocity = Vector3.Lerp(_particles[i].velocity, uFluid + Vector3.down * settlingSpeed, blend);
                     if (diffusionStrength > 0f)
-                        _particles[i].velocity += new Vector3(Gauss(), Gauss(), Gauss()) * diffusionStrength * Mathf.Sqrt(dt);
+                        _particles[i].velocity += new Vector3(Gauss(), Gauss(), Gauss()) * ambientJitter;
                 }
                 if (space != null)
                 {
-                    _particles[i].position = space.InverseTransformPoint(_particles[i].position);
-                    _particles[i].velocity = space.InverseTransformVector(_particles[i].velocity);
+                    _particles[i].position = toLocal.MultiplyPoint3x4(_particles[i].position);
+                    _particles[i].velocity = toLocal.MultiplyVector(_particles[i].velocity);
                 }
                 continue;
             }
@@ -213,7 +226,6 @@ public class AirflowParticleDriver : MonoBehaviour
             float tauEff = tau / f;
 
             // 3) Gravity, slightly reduced by the buoyancy of the air.
-            Vector3 gEff = gravity * (1f - airDensity / dropletDensity);
 
             // 4) New velocity. This is the physically-correct version of the old
             //    "blend toward the airflow" — the blend rate now comes from the
@@ -243,8 +255,8 @@ public class AirflowParticleDriver : MonoBehaviour
                 _particles[i].startSize = s.diameter * dotSizeScale;
             if (space != null)
             {
-                _particles[i].position = space.InverseTransformPoint(_particles[i].position);
-                _particles[i].velocity = space.InverseTransformVector(_particles[i].velocity);
+                _particles[i].position = toLocal.MultiplyPoint3x4(_particles[i].position);
+                _particles[i].velocity = toLocal.MultiplyVector(_particles[i].velocity);
             }
         }
 

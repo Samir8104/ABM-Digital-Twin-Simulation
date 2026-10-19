@@ -2784,7 +2784,7 @@ MonoBehaviour:
   doorOpenOffset: 0.9
   doorAnimDuration: 1.2
   travelSpeed: 3
-  doorDwellTime: 2.5
+  doorDwellTime: 2
   maxCapacity: 6
 --- !u!1 &4922541445084219576
 GameObject:

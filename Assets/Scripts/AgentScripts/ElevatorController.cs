@@ -12,17 +12,17 @@ public class ElevatorController : MonoBehaviour
 
     [Header("Floor Setup")]
     [Tooltip("World-space Y positions for each floor, index 0 = ground floor.")]
-    public float[] floorYPositions;
+    public float[] floorYPositions = new float[0];
 
     [Tooltip("Call stations, one per floor (assign in order: floor 0, 1, 2 …).")]
-    public ElevatorCallStation[] callStations;
+    public ElevatorCallStation[] callStations = new ElevatorCallStation[0];
 
     [Header("Door GameObjects")]
     [Tooltip("Left door Transform for each floor (same order as floorYPositions).")]
-    public Transform[] leftDoors;
+    public Transform[] leftDoors = new Transform[0];
 
     [Tooltip("Right door Transform for each floor (same order as floorYPositions).")]
-    public Transform[] rightDoors;
+    public Transform[] rightDoors = new Transform[0];
 
     [Tooltip("How far each door slides along its local axis when fully open.")]
     public float doorOpenOffset = 0.9f;
@@ -35,7 +35,7 @@ public class ElevatorController : MonoBehaviour
     public float travelSpeed = 3f;
 
     [Tooltip("Seconds the doors stay open while agents board/exit.")]
-    public float doorDwellTime = 2.5f;
+    public float doorDwellTime = 2f;
 
     [Header("Capacity")]
     [Tooltip("Maximum agents allowed inside the cage at once.")]
@@ -60,10 +60,8 @@ public class ElevatorController : MonoBehaviour
     private int _direction = 0;
     private bool _busy = false;
     private bool _doorsOpen = false;
-
-    // Tracks which floors have already been serviced this run so we never
-    // open the doors twice for the same stop
-    private readonly HashSet<int> _servicedThisStop = new();
+    private bool _acceptingPassengers;
+    private int _servicingFloor = -1;
 
     private Vector3[] _leftClosedPos;
     private Vector3[] _rightClosedPos;
@@ -74,6 +72,16 @@ public class ElevatorController : MonoBehaviour
     public bool IsBusy => _busy;
     public int CurrentFloor => _currentFloor;
     public int RiderCount => _riders.Count;
+    public bool CanBoardAt(int floor) => _acceptingPassengers && floor == _currentFloor;
+    public bool IsValidFloor(int floor) => floorYPositions != null && floor >= 0 && floor < floorYPositions.Length;
+
+    private ElevatorCallStation StationAt(int floor)
+    {
+        if (callStations != null)
+            foreach (var station in callStations)
+                if (station != null && station.floorIndex == floor && station.elevatorController == this) return station;
+        return null;
+    }
 
     /// <summary>
     /// Returns the world-space position of this elevator's call station on
@@ -81,13 +89,16 @@ public class ElevatorController : MonoBehaviour
     /// </summary>
     public Vector3 GetCallStationPosition(int floor)
     {
-        if (floor < callStations.Length && callStations[floor] != null)
-            return callStations[floor].transform.position;
+        var station = StationAt(floor);
+        if (station != null) return station.transform.position;
         return transform.position;
     }
 
     public void RequestFloor(int targetFloor)
     {
+        if (!IsValidFloor(targetFloor)) return;
+        // Calls during opening/dwell belong to this stop, not a second door cycle.
+        if (_servicingFloor == targetFloor && _doorsOpen) return;
         if (!_stopQueue.Contains(targetFloor))
             _stopQueue.Add(targetFloor);
 
@@ -97,21 +108,26 @@ public class ElevatorController : MonoBehaviour
 
     public void BoardAgent(NavigationAgent agent)
     {
+        if (agent == null || IsFull || _riders.Contains(agent)) return;
         _riders.Add(agent);
         agent.TeleportWithElevator(GetRiderSlot(_riders.Count - 1));
+        RequestFloor(agent.TargetFloor); // A destination is a stop only once its passenger boards.
     }
 
     public void ExitAgent(NavigationAgent agent) => _riders.Remove(agent);
 
     // ── Init ──────────────────────────────────────────────────────────────────
 
-    private void Start()
+    private void Awake()
     {
         _leftClosedPos = new Vector3[leftDoors.Length];
         _rightClosedPos = new Vector3[rightDoors.Length];
 
-        for (int i = 0; i < leftDoors.Length; i++) _leftClosedPos[i] = leftDoors[i].localPosition;
-        for (int i = 0; i < rightDoors.Length; i++) _rightClosedPos[i] = rightDoors[i].localPosition;
+        for (int i = 0; i < leftDoors.Length; i++) if (leftDoors[i] != null) _leftClosedPos[i] = leftDoors[i].localPosition;
+        for (int i = 0; i < rightDoors.Length; i++) if (rightDoors[i] != null) _rightClosedPos[i] = rightDoors[i].localPosition;
+        if (floorYPositions != null && floorYPositions.Length > 0)
+            for (int i = 1; i < floorYPositions.Length; i++)
+                if (Mathf.Abs(transform.position.y - floorYPositions[i]) < Mathf.Abs(transform.position.y - floorYPositions[_currentFloor])) _currentFloor = i;
     }
 
     // ── Main coroutine ────────────────────────────────────────────────────────
@@ -122,6 +138,7 @@ public class ElevatorController : MonoBehaviour
 
         while (_stopQueue.Count > 0)
         {
+            _riders.RemoveAll(rider => rider == null);
             int nextFloor = PickNextStop();
             _stopQueue.Remove(nextFloor);
 
@@ -134,22 +151,23 @@ public class ElevatorController : MonoBehaviour
             _currentFloor = nextFloor;
             _direction = 0;
 
-            // Open doors once and board/unload — never repeat for the same stop
+            _servicingFloor = nextFloor;
             _doorsOpen = true;
             yield return StartCoroutine(AnimateDoors(nextFloor, open: true));
 
-            // Let waiting agents board (respects IsFull internally)
-            if (nextFloor < callStations.Length && callStations[nextFloor] != null)
-                callStations[nextFloor].OnElevatorArrived();
-
-            // Let riders who need this floor exit
+            // Free seats before boarding. New arrivals may join this same dwell window.
             NotifyRidersAtFloor(nextFloor);
+            _acceptingPassengers = true;
+            var station = StationAt(nextFloor);
+            if (station != null) station.OnElevatorArrived();
 
-            // Hold doors open for the dwell period — no boarding/unloading happens again after this
-            yield return new WaitForSeconds(doorDwellTime);
+            yield return new WaitForSeconds(Mathf.Max(1f, doorDwellTime));
 
+            _acceptingPassengers = false;
+            _doorsOpen = false; // Calls during closing are serviced on a later visit.
             yield return StartCoroutine(AnimateDoors(nextFloor, open: false));
-            _doorsOpen = false;
+            _servicingFloor = -1;
+            if (station != null && station.WaitingCount > 0) RequestFloor(nextFloor);
         }
 
         _busy = false;
@@ -165,6 +183,8 @@ public class ElevatorController : MonoBehaviour
         List<int> sameDir = new();
         foreach (int f in _stopQueue)
         {
+            // Deliver riders before reopening a full car for the same waiting queue.
+            if (f == _currentFloor && _riders.Count > 0 && _stopQueue.Count > 1) continue;
             if (_direction == 0) sameDir.Add(f);
             else if (_direction > 0 && f > _currentFloor) sameDir.Add(f);
             else if (_direction < 0 && f < _currentFloor) sameDir.Add(f);
@@ -190,11 +210,11 @@ public class ElevatorController : MonoBehaviour
 
         while (t < 1f)
         {
-            t += Time.deltaTime * travelSpeed / Mathf.Max(dist, 0.01f);
+            t += Time.deltaTime * Mathf.Max(0.1f, travelSpeed) / Mathf.Max(dist, 0.01f);
             transform.position = Vector3.Lerp(start, end, Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t)));
 
             for (int i = 0; i < _riders.Count; i++)
-                _riders[i].TeleportWithElevator(GetRiderSlot(i));
+                if (_riders[i] != null) _riders[i].TeleportWithElevator(GetRiderSlot(i));
 
             yield return null;
         }
@@ -206,7 +226,8 @@ public class ElevatorController : MonoBehaviour
 
     private IEnumerator AnimateDoors(int floor, bool open)
     {
-        if (floor >= leftDoors.Length) yield break;
+        if (floor < 0 || floor >= leftDoors.Length || floor >= rightDoors.Length ||
+            leftDoors[floor] == null || rightDoors[floor] == null) yield break;
 
         Transform ld = leftDoors[floor];
         Transform rd = rightDoors[floor];
@@ -226,7 +247,7 @@ public class ElevatorController : MonoBehaviour
         float t = 0f;
         while (t < 1f)
         {
-            t += Time.deltaTime / doorAnimDuration;
+            t += Time.deltaTime / Mathf.Max(0.01f, doorAnimDuration);
             float smooth = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t));
             ld.localPosition = Vector3.Lerp(lStart, lEnd, smooth);
             rd.localPosition = Vector3.Lerp(rStart, rEnd, smooth);
@@ -257,7 +278,7 @@ public class ElevatorController : MonoBehaviour
     private void NotifyRidersAtFloor(int floor)
     {
         foreach (var rider in new List<NavigationAgent>(_riders))
-            if (rider.TargetFloor == floor)
+            if (rider != null && rider.TargetFloor == floor)
                 rider.ExitElevator(_currentFloor);
     }
 }

@@ -16,6 +16,9 @@ public class NavigationController : AbstractController
 
     [Header("Agent Parameters")]
     public float distToTargetThreshold = 2f;
+    [Min(0.1f)] public float classroomArrivalDistance = 0.45f;
+    [Tooltip("How far agents spread around the classroom node, while staying on connected walkable space.")]
+    [Min(0f)] public float classroomScatterRadius = 2f;
     public LayerMask agentLm;
     public GameObject agentPrefab;
     public int classExitLingerMin = 1;
@@ -45,6 +48,8 @@ public class NavigationController : AbstractController
     private GameObject _studyingNode;
     private GameObject[] _exitNodes;
     private GameObject[] _officeHoursNodes;
+    public TimeManager SimulationTime { get; private set; }
+    public ElevatorCallStation[] CallStations { get; private set; }
 
 
 
@@ -53,6 +58,8 @@ public class NavigationController : AbstractController
     {
         base.Init();
         rooms = GetAllRooms();
+        SimulationTime = FindFirstObjectByType<TimeManager>();
+        CallStations = FindObjectsByType<ElevatorCallStation>(FindObjectsSortMode.None);
         _bathroomNode = GameObject.Find(bathroomNodeName);
         _studyingNode = GameObject.Find(studyingNodeName);
         _exitNodes = GameObject.FindGameObjectsWithTag(exitNodeTag);
@@ -98,6 +105,37 @@ public class NavigationController : AbstractController
         return origin;
     }
 
+
+    public Vector3 GetClassroomTarget(GameObject room)
+    {
+        // Classroom objects are point markers, often with an empty MeshCollider.
+        // Broad exit-node sampling can select the corridor across a wall.
+        Vector3 origin = room.transform.position;
+        if (!NavMesh.SamplePosition(origin, out var center, 0.75f, NavMesh.AllAreas))
+        {
+            Debug.LogWarning($"[NavigationController] Classroom {room.name} needs a node on its interior NavMesh.", room);
+            return origin;
+        }
+        for (int i = 0; i < 12; i++)
+        {
+            Vector2 offset = Random.insideUnitCircle * classroomScatterRadius;
+            Vector3 candidate = center.position + new Vector3(offset.x, 0, offset.y);
+            if (NavMesh.SamplePosition(candidate, out var hit, 0.25f, NavMesh.AllAreas) &&
+                Mathf.Abs(hit.position.y - center.position.y) < 0.3f &&
+                !NavMesh.Raycast(center.position, hit.position, out _, NavMesh.AllAreas))
+                return hit.position;
+        }
+        return center.position;
+    }
+
+    public bool HasArrivedInClassroom(NavMeshAgent agent, Vector3 position, Vector3 destination)
+    {
+        Vector3 delta = position - destination;
+        return Mathf.Abs(delta.y) < 1.2f &&
+            new Vector2(delta.x, delta.z).sqrMagnitude <= classroomArrivalDistance * classroomArrivalDistance &&
+            !agent.pathPending && agent.pathStatus == NavMeshPathStatus.PathComplete &&
+            agent.remainingDistance <= classroomArrivalDistance;
+    }
 
     private GameObject GetClosestNodeWithTag(string tag, Vector3 fromPosition)
     {

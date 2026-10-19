@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Saved simulation heatmap</title>
+<style>
+:root{color-scheme:dark;font:15px system-ui,sans-serif;background:#171c24;color:#edf2f7}*{box-sizing:border-box}body{margin:0}header{padding:22px 28px;border-bottom:1px solid #3c4655}h1{font-size:22px;margin:0 0 5px}p{line-height:1.5}.muted{color:#b5c2d4;font-size:13px}main{display:grid;grid-template-columns:300px minmax(0,1fr);gap:24px;padding:24px}aside,section{min-width:0}label{display:block;margin:0 0 18px;font-weight:600}select,input[type=number]{display:block;width:100%;margin-top:7px;padding:9px;border-radius:6px;border:1px solid #66748a;background:#232c39;color:inherit;font:inherit}button,.file{display:block;width:100%;padding:10px 12px;margin:10px 0;border:0;border-radius:6px;background:#edf2f7;color:#152034;cursor:pointer;text-align:center;font:inherit;font-weight:600}.file input{width:100%;margin-top:8px;font-size:12px}hr{border:0;border-top:1px solid #3c4655;margin:24px 0}.scale{height:22px;background:linear-gradient(90deg,#00f 0%,#0ff 33%,#ff0 66%,#f00 100%);border-radius:3px;margin-top:12px}.ticks{display:flex;justify-content:space-between;font-size:12px;margin-top:6px}.mapframe{background:repeating-conic-gradient(#2c3440 0% 25%,#363f4b 0% 50%) 0 0/16px 16px;border:1px solid #536176;border-radius:8px;min-height:480px;max-height:78vh;overflow:auto;display:flex;align-items:flex-start;justify-content:flex-start;padding:18px}canvas{image-rendering:pixelated;display:block;flex:none}#hover{padding:12px 0;min-height:65px;font-variant-numeric:tabular-nums;white-space:pre-line}#notice{padding:12px;background:#253247;border-radius:6px}.tag{display:inline-block;background:#303e53;padding:4px 9px;border-radius:5px;font-size:12px}details{margin-top:20px}summary{cursor:pointer}a{color:#8acaff}@media(max-width:800px){main{grid-template-columns:1fr;padding:14px}.mapframe{min-height:300px}aside{display:grid;grid-template-columns:1fr 1fr;gap:12px}aside>*{margin:0}aside hr,aside details,aside #notice{grid-column:1/-1}}
+</style>
+<header><h1 id="title">Saved simulation heatmap</h1><div id="summary" class="muted">Open a saved run or an existing heatmap_cells.csv. No simulation or internet connection is required.</div></header>
+<main><aside>
+<label class="file">Open saved data<input id="file" type="file" accept=".json,.csv"></label>
+<label>Floor<select id="floor"></select></label>
+<label>Measurement<select id="measure"><option value="MeanOccupancy">Mean occupancy</option><option value="WalkingEntriesPerHour">Walking entries per hour</option><option value="CurrentOccupancy">Current occupancy (last snapshot)</option><option value="TotalEntries">Total entries (including arrivals)</option><option value="PersonHours">Person-hours</option></select></label>
+<label>Red starts at<input id="maximum" type="number" min="0.001" step="any" value="1"></label>
+<label>Map zoom<input id="zoom" type="range" min="1" max="6" step="0.25" value="1" style="width:100%;display:block;margin-top:12px"></label>
+<button id="tiff">Download numerical TIFF</button><button id="world">Download matching world file</button><button id="json">Download run data</button>
+<div id="notice" class="muted">Blue is a measured zero. The checkerboard is outside mapped coverage or has no observation time. Scales are linear and fixed across floors.</div>
+<details><summary>Reading and comparing the map</summary><p class="muted">Mean occupancy is simulated person-seconds divided by active simulated seconds, per cell. Walking entries count continuous crossings into a cell, including repeat visits, but exclude spawning and teleports. They are not unique people or a directional doorway count.</p><p class="muted">Match the sensor's area, floor, observation window, and units before comparing. These data validate counting inside the model; real-world accuracy needs sensor observations and calibration. Simulated nights skipped by the model are not included in the hour denominator.</p><p class="muted">TIFF pixels contain Float32 values, not colours; -9999 is NoData. Keep the .tfw beside the .tif. Coordinates are local Unity X/Z in metres, with increasing Z toward the top of the image. Survey registration is needed before overlaying on real-world GIS maps. A world file does not define a map CRS. <a href="https://gdal.org/en/stable/drivers/raster/wld.html">World-file documentation</a>.</p><p class="muted">Imported legacy CSVs show recorded cells only. Missing floor coverage stays unknown; simulated-hour and person-time metrics remain unavailable when those columns were not saved.</p></details>
+</aside><section><span id="unit" class="tag">No data loaded</span><div class="scale"></div><div class="ticks" id="ticks"></div><p id="rangeNote" class="muted"></p><div class="mapframe" id="frame"><canvas id="map" width="1" height="1" aria-label="Floor heatmap"></canvas></div><div id="hover">Move over the map to inspect a cell.</div></section></main>
+<script>
+'use strict';
+let data=/*HEATMAP_DATA*/null, cells=new Map(), valid=new Set(), raster, selectedFloor, view={x:0,row:0,width:1,height:1};
+const $=id=>document.getElementById(id), noData=-9999;
+const definitions={MeanOccupancy:['Mean people per cell',1],WalkingEntriesPerHour:['Walking entries / simulated hour / cell',60],CurrentOccupancy:['People per cell (last snapshot)',5],TotalEntries:['Total cell entries (includes arrivals)',100],PersonHours:['Person-hours per cell',1]};
+const format=v=>Number.isFinite(v)?Number(v.toPrecision(5)).toLocaleString(undefined,{maximumSignificantDigits:5}):'No observation';
+function value(cell,metric){
+ const seconds=data.simulatedSeconds, c=cell||{};
+ if(metric==='MeanOccupancy')return seconds>0&&data.integrationAvailable!==false?(c.simulatedPersonSeconds||0)/seconds:NaN;
+ if(metric==='WalkingEntriesPerHour')return seconds>0&&data.walkingAvailable!==false?(c.walkingEntries||0)*3600/seconds:NaN;
+ if(metric==='CurrentOccupancy')return data.sampleCount>0?(c.occupants||0):NaN;
+ if(metric==='TotalEntries')return c.entries||0;
+ return data.integrationAvailable!==false?(c.simulatedPersonSeconds||0)/3600:NaN;
+}
+function colour(t){
+ t=Math.max(0,Math.min(1,t));const stops=[[0,0,0,255],[.33,0,255,255],[.66,255,255,0],[1,255,0,0]];
+ for(let i=1;i<stops.length;i++)if(t<=stops[i][0]){let a=stops[i-1],b=stops[i],f=(t-a[0])/(b[0]-a[0]);return [1,2,3].map(k=>Math.round(a[k]+(b[k]-a[k])*f));}
+ return [255,0,0];
+}
+function install(source){
+ if(!source||source.schemaVersion!==2||!Number.isInteger(source.width)||!Number.isInteger(source.height)||source.width<1||source.height<1||source.width*source.height>8000000||!Array.isArray(source.floors)||!source.floors.length||!Array.isArray(source.cells)||!(source.cellSize>0))throw Error('Unsupported or invalid heatmap data.');
+ for(const f of source.floors)if(!Array.isArray(f.coverage)||f.coverage.some(i=>!Number.isInteger(i)||i<0||i>=source.width*source.height))throw Error('Invalid floor coverage.');
+ for(const c of source.cells)if(!Number.isInteger(c.x)||!Number.isInteger(c.z)||c.x<source.minX||c.x>=source.minX+source.width||c.z<source.minZ||c.z>=source.minZ+source.height)throw Error('Cell is outside its raster bounds.');
+ data=source;$('title').textContent=(data.building||'Building')+' — saved heatmap';
+ $('summary').textContent=(data.integrationAvailable===false?'Legacy CSV: simulated observation time was not recorded. ':'Observed '+format(data.simulatedSeconds/3600)+' active simulated hours; '+data.sampleCount+' snapshots. ')+(data.recordedUtc?'Recording created '+new Date(data.recordedUtc).toLocaleString()+'. ':'')+(data.coverageSource||'');
+ $('floor').replaceChildren(...data.floors.map(f=>{let o=document.createElement('option');o.value=f.number;o.textContent='Floor '+f.number+(Number.isFinite(f.height)?' · '+format(f.height)+' m':'');return o}));
+ $('measure').value=definitions[data.measure]?data.measure:'MeanOccupancy';
+ if(data.integrationAvailable===false)$('measure').value='TotalEntries';
+ $('maximum').value=data.scaleMaximum>0&&data.integrationAvailable!==false?data.scaleMaximum:definitions[$('measure').value][1];
+ $('zoom').value=1;draw();
+}
+function draw(){
+ if(!data)return;selectedFloor=Number($('floor').value);const metric=$('measure').value,max=Number($('maximum').value);
+ if(!Number.isFinite(max)||max<=0)return;
+ cells=new Map(data.cells.filter(c=>c.floor===selectedFloor).map(c=>[(data.minZ+data.height-1-c.z)*data.width+c.x-data.minX,c]));
+ valid=new Set(data.floors.find(f=>f.number===selectedFloor).coverage);for(const i of cells.keys())valid.add(i);
+ raster=new Float32Array(data.width*data.height);raster.fill(noData);
+ let left=data.width,right=-1,top=data.height,bottom=-1;for(const i of valid){const x=i%data.width,row=Math.floor(i/data.width);left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,row);bottom=Math.max(bottom,row)}
+ if(right<0){left=top=0;right=data.width-1;bottom=data.height-1}
+ left=Math.max(0,left-1);top=Math.max(0,top-1);right=Math.min(data.width-1,right+1);bottom=Math.min(data.height-1,bottom+1);
+ view={x:left,row:top,width:right-left+1,height:bottom-top+1};
+ const canvas=$('map');canvas.width=view.width;canvas.height=view.height;
+ const context=canvas.getContext('2d'),image=context.createImageData(data.width,data.height);
+ for(const i of valid){const v=value(cells.get(i),metric);if(!Number.isFinite(v))continue;raster[i]=v;const rgb=colour(v/max);image.data.set([...rgb,255],i*4)}
+ context.putImageData(image,-view.x,-view.row);fit();
+ $('unit').textContent=definitions[metric][0]+' · '+format(data.cellSize)+' m × '+format(data.cellSize)+' m cells';
+ $('ticks').replaceChildren(...[0,.25,.5,.75,1].map(t=>{let s=document.createElement('span');s.textContent=(t===1?'>= ':'')+format(t*max);return s}));
+ $('rangeNote').textContent='Blue = 0; red >= '+format(max)+'. Fixed linear scale shared by all floors. No smoothing. '+(Number.isFinite(value(null,metric))?'':'This measurement is unavailable until its observation time/data is recorded.');
+}
+function fit(){if(!data)return;const availableHeight=Math.max(180,Math.min(650,window.innerHeight-$('frame').getBoundingClientRect().top-100));const scale=Math.min(($('frame').clientWidth-38)/view.width,availableHeight/view.height)*Number($('zoom').value);$('map').style.width=Math.max(1,view.width*scale)+'px';$('map').style.height=Math.max(1,view.height*scale)+'px'}
+$('floor').onchange=draw;$('maximum').oninput=draw;$('measure').onchange=()=>{$('maximum').value=definitions[$('measure').value][1];draw()};$('zoom').oninput=fit;window.addEventListener('resize',fit);
+$('map').onmousemove=event=>{
+ if(!data)return;const r=$('map').getBoundingClientRect(),x=view.x+Math.floor((event.clientX-r.left)/r.width*view.width),row=view.row+Math.floor((event.clientY-r.top)/r.height*view.height),i=row*data.width+x;
+ if(x<0||x>=data.width||row<0||row>=data.height)return;
+ const c=cells.get(i),z=data.minZ+data.height-1-row,xx=data.minX+x;
+ $('hover').textContent='Floor '+selectedFloor+' | X '+format(xx*data.cellSize)+' to '+format((xx+1)*data.cellSize)+' m | Z '+format(z*data.cellSize)+' to '+format((z+1)*data.cellSize)+' m\n'+(raster[i]===noData?'No observation / outside mapped coverage':definitions[$('measure').value][0]+': '+format(value(c,$('measure').value)))+(c?' | Total entries: '+format(c.entries)+' | Distinct cell visitors: '+format(c.uniqueVisitors)+(c.onWalkableSurface===false?' | Outside saved walkable mask':''):'');
+};
+function download(bytes,name,type){const url=URL.createObjectURL(new Blob([bytes],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),2000)}
+function basename(){return 'floor-'+selectedFloor+'-'+$('measure').value}
+function tiffBytes(){
+ if(!raster)throw Error('Load data first.');
+ const text=new TextEncoder().encode(definitions[$('measure').value][0]+'; local X/Z metres; NoData=-9999\0'),nodata=new TextEncoder().encode('-9999\0'),n=14,textOffset=8+2+n*12+4,nodataOffset=textOffset+text.length,pixelOffset=(nodataOffset+nodata.length+3)&~3;
+ const buffer=new ArrayBuffer(pixelOffset+raster.length*4),v=new DataView(buffer);v.setUint16(0,0x4949,true);v.setUint16(2,42,true);v.setUint32(4,8,true);v.setUint16(8,n,true);let p=10;
+ function tag(id,type,count,value){v.setUint16(p,id,true);v.setUint16(p+2,type,true);v.setUint32(p+4,count,true);v.setUint32(p+8,value,true);p+=12}
+ tag(256,4,1,data.width);tag(257,4,1,data.height);tag(258,3,1,32);tag(259,3,1,1);tag(262,3,1,1);tag(270,2,text.length,textOffset);tag(273,4,1,pixelOffset);tag(274,3,1,1);tag(277,3,1,1);tag(278,4,1,data.height);tag(279,4,1,raster.length*4);tag(284,3,1,1);tag(339,3,1,3);tag(42113,2,nodata.length,nodataOffset);v.setUint32(p,0,true);
+ new Uint8Array(buffer,textOffset,text.length).set(text);new Uint8Array(buffer,nodataOffset,nodata.length).set(nodata);for(let i=0;i<raster.length;i++)v.setFloat32(pixelOffset+i*4,raster[i],true);return buffer;
+}
+$('tiff').onclick=()=>{if(data)download(tiffBytes(),basename()+'.tif','image/tiff')};
+$('world').onclick=()=>{if(data)download([data.cellSize,0,0,-data.cellSize,(data.minX+.5)*data.cellSize,(data.minZ+data.height-.5)*data.cellSize].join('\n')+'\n',basename()+'.tfw','text/plain')};
+$('json').onclick=()=>{if(data)download(JSON.stringify({...data,measure:$('measure').value,scaleMaximum:Number($('maximum').value)}),'heatmap_run.json','application/json')};
+function fromCSV(text){
+ const lines=text.replace(/^\uFEFF/,'').trim().split(/\r?\n/),header=lines.shift().split(','),at=name=>header.indexOf(name);
+ for(const name of ['sample_id','floor','cell_x','cell_z','cell_size','occupants','cell_entries'])if(at(name)<0)throw Error('Not a heatmap_cells.csv file.');
+ let latest=-1,rows=[];for(const line of lines){if(!line.trim())continue;let row=line.split(','),sample=Number(row[at('sample_id')]);if(!Number.isFinite(sample))continue;if(sample>latest){latest=sample;rows=[]}if(sample===latest)rows.push(row)}
+ if(!rows.length)throw Error('No completed snapshots in this CSV.');
+ const size=Number(rows[0][at('cell_size')]),cells=rows.map(r=>({floor:Number(r[at('floor')]),x:Number(r[at('cell_x')]),z:Number(r[at('cell_z')]),occupants:Number(r[at('occupants')]),entries:Number(r[at('cell_entries')]),uniqueVisitors:at('unique_visitors')>=0?Number(r[at('unique_visitors')]):0,walkingEntries:at('walking_entries')>=0?Number(r[at('walking_entries')]):null,simulatedPersonSeconds:at('simulated_person_seconds')>=0?Number(r[at('simulated_person_seconds')]):null}));
+ let minX=Infinity,minZ=Infinity,maxX=-Infinity,maxZ=-Infinity;for(const c of cells){minX=Math.min(minX,c.x);maxX=Math.max(maxX,c.x);minZ=Math.min(minZ,c.z);maxZ=Math.max(maxZ,c.z)}
+ const width=maxX-minX+1,height=maxZ-minZ+1;
+ return {schemaVersion:2,building:'Imported CSV',coverageSource:'Recorded cells only; unvisited coverage unknown',minX,minZ,width,height,cellSize:size,cells,sampleCount:latest+1,simulatedSeconds:at('simulated_seconds')>=0?Number(rows[0][at('simulated_seconds')]):0,integrationAvailable:at('simulated_person_seconds')>=0,walkingAvailable:at('walking_entries')>=0,measure:'MeanOccupancy',scaleMaximum:1,floors:[...new Set(cells.map(c=>c.floor))].sort((a,b)=>a-b).map(number=>({number,coverage:[]}))};
+}
+$('file').onchange=async()=>{try{const file=$('file').files[0];if(!file)return;let text=await file.text();install(file.name.toLowerCase().endsWith('.csv')?fromCSV(text):JSON.parse(text))}catch(error){$('summary').textContent='Could not load data: '+error.message}};
+if(data){try{install(data)}catch(error){$('summary').textContent=error.message}}
+</script></html>

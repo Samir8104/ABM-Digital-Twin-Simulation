@@ -1,4 +1,4 @@
-﻿/*
+/*
 Boids - Flocking behavior simulation.
 
 Copyright (C) 2014 Keijiro Takahashi
@@ -24,7 +24,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 using UnityEngine;
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 
 using ABMU.Core;
 using ABMU;

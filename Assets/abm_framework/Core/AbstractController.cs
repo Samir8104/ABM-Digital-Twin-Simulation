@@ -10,13 +10,16 @@ namespace ABMU
         using System.Collections.Generic;
         using UnityEngine;
         using System.Diagnostics;
+        #if UNITY_EDITOR
         using UnityEditor;
+        #endif
 
         /// <summary>
         /// Abstract controller class. To be used as a blueprint for simulation-specific controllers. A simulation-specific controller should inherit from this class
         /// </summary>
         public class AbstractController : MonoBehaviour, IInitializable
         {
+            readonly Stopwatch stopwatch = new Stopwatch();
             int milisDelayCum = 0;
             float millisDelayAvg = 0f;
             public Scheduler scheduler;
@@ -64,8 +67,7 @@ namespace ABMU
                 if(!isSimulationPaused){
                     currentTick ++;
                 
-                    Stopwatch stopwatch = new Stopwatch();
-                    stopwatch.Start();
+                    stopwatch.Restart();
 
                     scheduler.Tick();
 

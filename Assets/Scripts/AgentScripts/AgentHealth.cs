@@ -11,6 +11,12 @@ public class AgentHealth : MonoBehaviour
     public bool IsInfected => infected;
     public int InhaledParticles { get; private set; }
     public int InhaledInfectedParticles { get; private set; }
+    public int SpawnGeneration { get; private set; }
+    public bool IsPresent => isActiveAndEnabled && (bodyCollider == null || bodyCollider.enabled) &&
+        (navigation == null || navigation.Schedule == null ||
+        (navigation.Schedule.CurrentActivity != AgentActivity.Idle &&
+         navigation.Schedule.CurrentActivity != AgentActivity.OffCampus && navigation.Schedule.CurrentActivity != AgentActivity.Done));
+    public static IReadOnlyList<AgentHealth> RegisteredAgents => agents;
 
     private ParticleSystem mouth;
     private AgentBehaviorController behavior;
@@ -18,6 +24,7 @@ public class AgentHealth : MonoBehaviour
     private Renderer[] bodies;
     private Collider bodyCollider;
     private TimeManager clock;
+    private NavigationAgent navigation;
     private Vector3 mouthPosition;
     private readonly List<MaterialPropertyBlock> originals = new();
     private MaterialPropertyBlock tint;
@@ -26,6 +33,7 @@ public class AgentHealth : MonoBehaviour
     private static readonly Stack<List<AgentHealth>> buckets = new();
     private static int gridFrame = -1;
     private const float CellSize = 0.5f;
+    private static readonly Unity.Profiling.ProfilerMarker CaptureMarker = new("Simulation.Inhalation");
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     private static void ResetStatics()
@@ -45,7 +53,8 @@ public class AgentHealth : MonoBehaviour
                 if (ps.GetComponent<AmbientParticleMarker>() == null) { mouth = ps; break; }
         }
         bodyCollider = GetComponent<Collider>();
-        clock = FindFirstObjectByType<TimeManager>();
+        navigation = GetComponent<NavigationAgent>();
+        clock = navigation != null ? navigation.SimulationTime : FindFirstObjectByType<TimeManager>();
         var renderers = new List<Renderer>();
         foreach (var r in GetComponentsInChildren<Renderer>(true))
         {
@@ -64,6 +73,7 @@ public class AgentHealth : MonoBehaviour
 
     public void ResetForSpawn(bool initiallyInfected)
     {
+        SpawnGeneration++;
         infected = initiallyInfected;
         InhaledParticles = InhaledInfectedParticles = 0;
         if (mouth != null) mouth.Clear();
@@ -94,8 +104,8 @@ public class AgentHealth : MonoBehaviour
         trails.inheritParticleColor = true;
     }
 
-    private bool CanInhale => isActiveAndEnabled && mouth != null &&
-        (bodyCollider == null || bodyCollider.enabled) && (clock == null || clock.IsRunning) &&
+    private bool CanInhale => ParticleSimulationSettings.Enabled && IsPresent && mouth != null &&
+        (clock == null || clock.IsRunning) &&
         (behavior == null || behavior.IsInhaling);
 
     private static Vector3Int Cell(Vector3 p) => new Vector3Int(
@@ -111,20 +121,34 @@ public class AgentHealth : MonoBehaviour
         {
             if (!agent.CanInhale) continue;
             agent.mouthPosition = agent.mouth.transform.position;
-            var key = Cell(agent.mouthPosition);
-            if (!grid.TryGetValue(key, out var bucket))
+            // Insert each receiver in every cell its capture sphere overlaps.
+            // Particle queries then need one lookup instead of 27; the exact
+            // distance test below still determines capture and nearest receiver.
+            float radius = Mathf.Clamp(agent.inhalationRadius, 0.01f, CellSize);
+            Vector3Int min = Cell(agent.mouthPosition - Vector3.one * radius);
+            Vector3Int max = Cell(agent.mouthPosition + Vector3.one * radius);
+            for (int x = min.x; x <= max.x; x++)
+            for (int y = min.y; y <= max.y; y++)
+            for (int z = min.z; z <= max.z; z++)
             {
-                bucket = buckets.Count > 0 ? buckets.Pop() : new List<AgentHealth>();
-                grid.Add(key, bucket);
+                var key = new Vector3Int(x, y, z);
+                if (!grid.TryGetValue(key, out var bucket))
+                {
+                    bucket = buckets.Count > 0 ? buckets.Pop() : new List<AgentHealth>();
+                    grid.Add(key, bucket);
+                }
+                bucket.Add(agent);
             }
-            bucket.Add(agent);
         }
     }
 
     private void LateUpdate()
     {
+        if (!ParticleSimulationSettings.Enabled) return;
+        using var profile = CaptureMarker.Auto();
         if (mouth == null || (clock != null && !clock.IsRunning) || Time.deltaTime <= 0f) return;
         BuildGrid();
+        if (grid.Count == 0 || mouth.particleCount == 0) return;
         if (particles == null || particles.Length < mouth.main.maxParticles)
             particles = new ParticleSystem.Particle[mouth.main.maxParticles];
         int count = mouth.GetParticles(particles);
@@ -139,23 +163,7 @@ public class AgentHealth : MonoBehaviour
             if (main.simulationSpace != ParticleSystemSimulationSpace.World && space != null)
                 pos = space.TransformPoint(pos);
             Vector3Int key = Cell(pos);
-            AgentHealth nearest = null;
-            float nearestDistance = float.PositiveInfinity;
-            for (int x = -1; x <= 1; x++)
-            for (int y = -1; y <= 1; y++)
-            for (int z = -1; z <= 1; z++)
-            {
-                if (!grid.TryGetValue(key + new Vector3Int(x, y, z), out var bucket)) continue;
-                foreach (var receiver in bucket)
-                {
-                    if (receiver == this) continue; // Exhalation must not be immediately consumed by its source.
-                    float d = (pos - receiver.mouthPosition).sqrMagnitude;
-                    float radius = Mathf.Clamp(receiver.inhalationRadius, 0.01f, CellSize);
-                    if (d > radius * radius || d >= nearestDistance) continue;
-                    nearest = receiver;
-                    nearestDistance = d;
-                }
-            }
+            AgentHealth nearest = FindReceiver(pos, key, this);
             if (nearest == null) continue;
             nearest.InhaledParticles++;
             if (infected) nearest.InhaledInfectedParticles++;
@@ -163,5 +171,21 @@ public class AgentHealth : MonoBehaviour
             changed = true;
         }
         if (changed) mouth.SetParticles(particles, count);
+    }
+
+    private static AgentHealth FindReceiver(Vector3 pos, Vector3Int key, AgentHealth source)
+    {
+        AgentHealth nearest = null;
+        float nearestDistance = float.PositiveInfinity;
+        if (grid.TryGetValue(key, out var bucket))
+        foreach (var receiver in bucket)
+        {
+            if (receiver == source) continue;
+            float d = (pos - receiver.mouthPosition).sqrMagnitude;
+            float radius = Mathf.Clamp(receiver.inhalationRadius, 0.01f, CellSize);
+            if (d > radius * radius || d >= nearestDistance) continue;
+            nearest = receiver; nearestDistance = d;
+        }
+        return nearest;
     }
 }

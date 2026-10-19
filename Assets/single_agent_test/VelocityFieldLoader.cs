@@ -23,7 +23,7 @@ public class VelocityFieldLoader : MonoBehaviour
     public float playbackSpeed = 1f;
     public float PlaybackTime { get; private set; }
     public float MaximumSpeed => recordedField != null ? recordedField.maxSpeed : 1f;
-    float nextParticleScan;
+    Vector3[] samplePositions, sampleVelocities;
 
     void Update()
     {
@@ -32,17 +32,11 @@ public class VelocityFieldLoader : MonoBehaviour
         float start = recordedField.times[0];
         PlaybackTime += Time.deltaTime * Mathf.Max(0, playbackSpeed);
         PlaybackTime = loopRecording && end > start ? start + Mathf.Repeat(PlaybackTime - start, end - start) : Mathf.Min(PlaybackTime, end);
-        // Includes systems spawned later and inactive systems before their first emission.
-        if (Time.unscaledTime >= nextParticleScan)
-        {
-            nextParticleScan = Time.unscaledTime + 0.5f;
-            AttachParticleDrivers();
-        }
     }
     void AttachParticleDrivers()
     {
         foreach (var ps in FindObjectsByType<ParticleSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None))
-            if (ps.GetComponent<AirflowParticleDriver>() == null) ps.gameObject.AddComponent<AirflowParticleDriver>();
+            ParticleSimulationSettings.Register(ps);
     }
     void OnDestroy() { if (Instance == this) Instance = null; }
     [Header("Scene alignment")]
@@ -169,15 +163,33 @@ public class VelocityFieldLoader : MonoBehaviour
     // -----------------------------------------------------------------------
     public Vector3 SampleVelocity(Vector3 worldPos)
     {
-        if (!IsLoaded || !IsInBounds(worldPos)) return Vector3.zero;
+        if (!IsLoaded) return Vector3.zero;
         if (recordedField != null)
             return transform.TransformVector(recordedField.Sample(transform.InverseTransformPoint(worldPos), PlaybackTime, supportRadius));
+        if (!IsInBounds(worldPos)) return Vector3.zero;
 
         int ix = Mathf.Clamp(Mathf.FloorToInt((worldPos.x - xMin) / cellSize), 0, _nx - 1);
         int iy = Mathf.Clamp(Mathf.FloorToInt((worldPos.y - yMin) / cellSize), 0, _ny - 1);
         int iz = Mathf.Clamp(Mathf.FloorToInt((worldPos.z - zMin) / cellSize), 0, _nz - 1);
 
         return _field[ix, iy, iz];
+    }
+
+    public void SampleVelocities(Vector3[] worldPositions, Vector3[] worldVelocities, int count)
+    {
+        if (!IsLoaded) { System.Array.Clear(worldVelocities, 0, count); return; }
+        if (recordedField == null)
+        {
+            for (int i = 0; i < count; i++) worldVelocities[i] = SampleVelocity(worldPositions[i]);
+            return;
+        }
+        if (samplePositions == null || samplePositions.Length < count)
+        { int capacity = Mathf.NextPowerOfTwo(Mathf.Max(1, count)); samplePositions = new Vector3[capacity]; sampleVelocities = new Vector3[capacity]; }
+        var toLocal = transform.worldToLocalMatrix;
+        var toWorld = transform.localToWorldMatrix;
+        for (int i = 0; i < count; i++) samplePositions[i] = toLocal.MultiplyPoint3x4(worldPositions[i]);
+        recordedField.SampleBatch(samplePositions, sampleVelocities, count, PlaybackTime, supportRadius);
+        for (int i = 0; i < count; i++) worldVelocities[i] = toWorld.MultiplyVector(sampleVelocities[i]);
     }
 
     // -----------------------------------------------------------------------
