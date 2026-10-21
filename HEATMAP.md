@@ -16,6 +16,10 @@ Keyboard shortcuts are ignored while typing in an input field. The legend uses t
 
 ## Measurements and colours
 
+The live heatmap and saved viewer default to **walking entries per simulated hour**, with red at 60 entries/hour/cell. Standing in a classroom adds no walking traffic. Saved JSON views previously set to occupancy also open as walking traffic, with an appropriate traffic scale. Other measurements remain available through the measurement controls. Legacy CSVs without walking counts fall back to total entries.
+
+The saved view title and TIFF description are **McEniry heatmap**. The saved view omits the observation subtitle and lower-left explanatory text. Technical coordinate and sensor-comparison information is documented here instead.
+
 The default grid is one metre by one metre, separated by floor. Blue means zero, cyan/yellow intermediate values, and red means at least the displayed threshold. Values above the threshold remain unchanged in the exported data. The scale does not automatically change as more people move through the building. Compare runs using the same measurement, cell size, threshold and time window.
 
 | Measurement | Definition | Default red threshold |

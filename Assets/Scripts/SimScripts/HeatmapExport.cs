@@ -205,7 +205,7 @@ public static class HeatmapExport
             {
                 string path = Path.Combine(directory, "floor-" + floor.number + "-" + metric + ".tif");
                 HeatmapTiff.Write(path + ".tmp", data.width, data.height, data.Raster(floor.number, metric),
-                    HeatmapMeasures.Label(metric) + "; local X/Z metres; NoData=-9999; active simulated seconds=" + data.simulatedSeconds.ToString("R", CultureInfo.InvariantCulture));
+                    "McEniry heatmap");
                 Replace(path + ".tmp", path);
                 AtomicText(Path.ChangeExtension(path, ".tfw"), HeatmapTiff.WorldFile(data));
             }

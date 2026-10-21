@@ -17,7 +17,7 @@ public static class HeatmapAccuracyValidation
     public static void Run()
     {
         if (!Application.isBatchMode) throw new InvalidOperationException("Run these fixtures in an isolated batch editor.");
-        ValidateIntegrals(); ValidateRuntimeClock(); WriteAnalyticExport();
+        ValidateIntegrals(); ValidateFootTraffic(); ValidateRuntimeClock(); WriteAnalyticExport();
         HeatmapValidation.Run();
         Debug.Log("HEATMAP ACCURACY VALIDATION PASSED: conserved segment person-time, negative/diagonal cells, simulated-hour normalization, speed changes, pauses, relocation exclusions, fixed shared scales, TIFF/world-file orientation, zero versus NoData, saved viewer/JSON and CSV persistence. Physical sensor calibration remains external to these counting tests.");
     }
@@ -51,6 +51,25 @@ public static class HeatmapAccuracyValidation
         Require(double.IsNaN(HeatmapMeasures.Value(null, HeatmapMeasure.WalkingEntriesPerHour, 0, 0)), "Undefined duration became a measured zero.");
         Require(HeatmapCoverage.Intersects(new Vector3(0,0,0.1f),new Vector3(2,0,0.1f),new Vector3(2,0,0.2f),0.5f,0.5f,0.5f), "Narrow corridor lost because cell centre was outside.");
         Require(!HeatmapCoverage.Intersects(Vector3.zero,Vector3.right,Vector3.forward,2.5f,2.5f,0.5f), "Outside floor cell became valid coverage.");
+    }
+
+    private static void ValidateFootTraffic()
+    {
+        var grid = new HeatmapGrid(new[] { 0f }, 1);
+        var classroom = new Vector3(0.5f, 0, 0.5f);
+        grid.AdvanceTime(60, 3600);
+        for (int person = 0; person < 20; person++)
+        {
+            grid.RecordArrival(classroom, person);
+            grid.RecordDuration(classroom, classroom, 3600);
+            grid.RecordMovement(classroom, classroom, person);
+        }
+        Near(HeatmapMeasures.Value(grid.Cells[grid.Key(classroom)], HeatmapMeasure.WalkingEntriesPerHour, 3600, 0), 0,
+            "Stationary classroom occupants inflated foot traffic");
+        var start = new Vector3(2.5f, 0, 0.5f); var end = new Vector3(5.5f, 0, 0.5f);
+        for (int person = 0; person < 60; person++) grid.RecordMovement(start, end, person);
+        Near(HeatmapMeasures.Value(grid.Cells[new Vector3Int(4, 0, 0)], HeatmapMeasure.WalkingEntriesPerHour, 3600, 0), 60,
+            "Busy hallway did not retain walking traffic");
     }
 
     private static void ValidateRuntimeClock()
@@ -111,6 +130,9 @@ public static class HeatmapAccuracyValidation
         try
         {
             var map=root.AddComponent<SimulationHeatmap>();map.floorHeights=new[]{0f,4f};map.Initialize(null);
+            Require(map.measure == HeatmapMeasure.WalkingEntriesPerHour && map.scaleMaximum == 60,
+                "Default heatmap is not foot traffic");
+            map.SetMeasure(HeatmapMeasure.MeanOccupancy);
             typeof(SimulationHeatmap).GetField("<Grid>k__BackingField",Hidden).SetValue(map,grid);
             map.SetScale(2);
             Require(map.CellColor(grid.Key(bottom))==map.CellColor(grid.Key(upper)),"Different scale on different floors.");

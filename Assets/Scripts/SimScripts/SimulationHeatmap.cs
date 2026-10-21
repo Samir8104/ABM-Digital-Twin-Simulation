@@ -23,8 +23,8 @@ public sealed class SimulationHeatmap : MonoBehaviour
     public float[] floorHeights;
     [Header("Readable scale and saved exports")]
     public string buildingName = "McEniry";
-    public HeatmapMeasure measure = HeatmapMeasure.MeanOccupancy;
-    [Min(0.001f)] public float scaleMaximum = 1f;
+    public HeatmapMeasure measure = HeatmapMeasure.WalkingEntriesPerHour;
+    [Min(0.001f)] public float scaleMaximum = 60f;
     [Min(5f)] public float checkpointIntervalSeconds = 30f;
     public bool exportTiffsOnStop = true;
     public HeatmapGrid Grid { get; private set; }
