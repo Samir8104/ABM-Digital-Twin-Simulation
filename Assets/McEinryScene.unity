@@ -222354,6 +222354,8 @@ MonoBehaviour:
   defaultAgentsEnabled: 1
   particleToggle: {fileID: 0}
   defaultParticlesEnabled: 1
+  bodyWakeSlider: {fileID: 0}
+  defaultBodyWakeStrength: 1
   runWithoutRendering: 0
   recordCsv: 1
   recordingIntervalSeconds: 1

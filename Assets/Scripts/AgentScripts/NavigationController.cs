@@ -50,6 +50,31 @@ public class NavigationController : AbstractController
     private GameObject[] _officeHoursNodes;
     public TimeManager SimulationTime { get; private set; }
     public ElevatorCallStation[] CallStations { get; private set; }
+    private readonly Dictionary<NavigationAgent, Vector3> _roomTargets = new();
+
+    public void ReleaseRoomTarget(NavigationAgent agent) => _roomTargets.Remove(agent);
+
+    public Vector3 ReserveRoomTarget(NavigationAgent agent, GameObject room, bool classroom)
+    {
+        _roomTargets.Remove(agent);
+        Vector3 best = classroom ? GetClassroomTarget(room) : GetRandomPointInRoom(room);
+        float bestClearance = -1f;
+        var nav = agent.GetComponent<NavMeshAgent>();
+        var path = new NavMeshPath();
+        float spacing = nav.radius * 2f + 0.25f;
+        for (int i = 0; i < 32; i++)
+        {
+            Vector3 point = classroom ? GetClassroomTarget(room) : GetRandomPointInRoom(room);
+            if (!nav.CalculatePath(point, path) || path.status != NavMeshPathStatus.PathComplete) continue;
+            float clearance = float.MaxValue;
+            foreach (var other in _roomTargets.Values)
+                clearance = Mathf.Min(clearance, (point - other).sqrMagnitude);
+            if (clearance > bestClearance) { best = point; bestClearance = clearance; }
+            if (clearance >= spacing * spacing) break;
+        }
+        _roomTargets[agent] = best;
+        return best;
+    }
 
 
 
@@ -213,12 +238,26 @@ public class NavigationController : AbstractController
 
     public Vector3 GetRandomPointInRoom(GameObject room)
     {
-        Bounds rb = room.GetComponent<Collider>().bounds;
-        Vector3 cr = Utilities.RandomPointInBounds(rb);
-        cr.y = rb.center.y;
-        cr.y -= rb.extents.y;
-        cr.y += agentPrefab.GetComponent<NavMeshAgent>().baseOffset;
-        return cr;
+        // Many activity nodes are point markers or have empty mesh colliders.
+        // Never feed arbitrary bounds points (walls/voids) to SetDestination.
+        var collider = room.GetComponent<Collider>();
+        if (collider == null || collider.bounds.size.sqrMagnitude < 0.01f)
+            return GetClassroomTarget(room);
+        Bounds bounds = collider.bounds;
+        Vector3 origin = bounds.center;
+        origin.y = bounds.min.y;
+        if (!NavMesh.SamplePosition(origin, out var center, 1f, NavMesh.AllAreas))
+            return GetClassroomTarget(room);
+        for (int i = 0; i < 16; i++)
+        {
+            Vector3 candidate = new Vector3(Random.Range(bounds.min.x, bounds.max.x), center.position.y,
+                Random.Range(bounds.min.z, bounds.max.z));
+            if (NavMesh.SamplePosition(candidate, out var hit, 0.25f, NavMesh.AllAreas) &&
+                Mathf.Abs(hit.position.y - center.position.y) < 0.3f &&
+                !NavMesh.Raycast(center.position, hit.position, out _, NavMesh.AllAreas))
+                return hit.position;
+        }
+        return center.position;
     }
 
     public Vector3 GetCenterOfRoom(GameObject room)

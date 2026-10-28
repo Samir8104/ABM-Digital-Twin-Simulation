@@ -4,13 +4,21 @@ using UnityEngine;
 public static class ParticleSimulationSettings
 {
     public const string PreferenceKey = "Simulation.ParticlesEnabled";
+    public const string BodyWakePreferenceKey = "Simulation.BodyWakeStrength";
+    public static float BodyWakeStrength { get; private set; } = 1f;
     public static bool Enabled { get; private set; } = true;
     public static bool SimulationRunning { get; private set; } = true;
     public static bool IsSimulating => Enabled && SimulationRunning;
     private static readonly List<ParticleSimulationGate> gates = new();
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    private static void Reset() { gates.Clear(); Enabled = true; SimulationRunning = true; }
+    private static void Reset() { gates.Clear(); Enabled = true; SimulationRunning = true; BodyWakeStrength = 1f; }
+
+    public static void SetBodyWakeStrength(float value, bool savePreference = true)
+    {
+        BodyWakeStrength = Mathf.Clamp01(value);
+        if (savePreference) { PlayerPrefs.SetFloat(BodyWakePreferenceKey, BodyWakeStrength); PlayerPrefs.Save(); }
+    }
 
     public static void SetSimulationRunning(bool value)
     {

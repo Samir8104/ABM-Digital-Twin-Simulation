@@ -80,7 +80,8 @@ public static class ParticlePerformanceValidation
                     var mouth = agent.GetComponentInChildren<ParticleSystem>();
                     Require(mouth == null || mouth.particleCount == 0, "Loading agents emitted particles.");
                     var navigation = agent.GetComponent<UnityEngine.AI.NavMeshAgent>();
-                    Require(navigation.isOnNavMesh, "An agent was instantiated away from the NavMesh.");
+                    Require(!navigation.enabled && UnityEngine.AI.NavMesh.SamplePosition(agent.transform.position, out _, 1f, UnityEngine.AI.NavMesh.AllAreas),
+                        "An idle pool member blocks avoidance or was instantiated away from the NavMesh.");
                 }
                 return;
             }

@@ -29,6 +29,9 @@ public class SimulationFlowController : MonoBehaviour
     [Header("Particle simulation")]
     public Toggle particleToggle;
     public bool defaultParticlesEnabled = true;
+    public Slider bodyWakeSlider;
+    [Range(0f, 1f)] public float defaultBodyWakeStrength = 1f;
+    private TextMeshProUGUI _bodyWakeLabel;
     private SimulationHeatmap heatmap;
     [Header("Background and recording")]
     [Tooltip("Automatically load the defaults and disable cameras/UI when entering Play mode.")]
@@ -68,6 +71,8 @@ public class SimulationFlowController : MonoBehaviour
         ParticleSimulationSettings.SetSimulationRunning(false);
         ParticleSimulationSettings.SetEnabled(PlayerPrefs.GetInt(ParticleSimulationSettings.PreferenceKey,
             defaultParticlesEnabled ? 1 : 0) != 0, false);
+        ParticleSimulationSettings.SetBodyWakeStrength(PlayerPrefs.GetFloat(ParticleSimulationSettings.BodyWakePreferenceKey,
+            defaultBodyWakeStrength), false);
         foreach (var particles in FindObjectsByType<ParticleSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             ParticleSimulationSettings.Register(particles);
         heatmap = GetComponent<SimulationHeatmap>();
@@ -110,6 +115,79 @@ public class SimulationFlowController : MonoBehaviour
             agentToggle.onValueChanged.AddListener(SetAgentsEnabled);
         }
         SetAgentsEnabled(defaultAgentsEnabled);
+        if (bodyWakeSlider == null && menuPanel != null) bodyWakeSlider = CreateBodyWakeSlider();
+        if (bodyWakeSlider != null)
+        {
+            bodyWakeSlider.minValue = 0f;
+            bodyWakeSlider.maxValue = 1f;
+            bodyWakeSlider.wholeNumbers = false;
+            bodyWakeSlider.SetValueWithoutNotify(ParticleSimulationSettings.BodyWakeStrength);
+            bodyWakeSlider.onValueChanged.AddListener(SetBodyWakeStrength);
+            UpdateBodyWakeLabel(ParticleSimulationSettings.BodyWakeStrength);
+        }
+    }
+
+    private void SetBodyWakeStrength(float value)
+    {
+        ParticleSimulationSettings.SetBodyWakeStrength(value);
+        UpdateBodyWakeLabel(ParticleSimulationSettings.BodyWakeStrength);
+    }
+
+    private void UpdateBodyWakeLabel(float value)
+    {
+        if (_bodyWakeLabel != null)
+            _bodyWakeLabel.text = value <= 0f ? "Particle body wake: Off" : $"Particle body wake: {Mathf.RoundToInt(value * 100f)}%";
+    }
+
+    private Slider CreateBodyWakeSlider()
+    {
+        var row = new GameObject("BodyWakeControl", typeof(RectTransform));
+        row.transform.SetParent(menuPanel.transform, false);
+        var rect = (RectTransform)row.transform;
+        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = new Vector2(0f, -295f);
+        rect.sizeDelta = new Vector2(1120f, 60f);
+        var labelObject = new GameObject("BodyWakeLabel", typeof(RectTransform), typeof(TextMeshProUGUI));
+        labelObject.transform.SetParent(row.transform, false);
+        _bodyWakeLabel = labelObject.GetComponent<TextMeshProUGUI>();
+        var source = menuPanel.GetComponentInChildren<TextMeshProUGUI>(true);
+        if (source != null) _bodyWakeLabel.font = source.font;
+        _bodyWakeLabel.color = Color.white;
+        _bodyWakeLabel.fontStyle = FontStyles.Bold;
+        _bodyWakeLabel.fontSize = 30f;
+        _bodyWakeLabel.alignment = TextAlignmentOptions.MidlineLeft;
+        _bodyWakeLabel.raycastTarget = false;
+        _bodyWakeLabel.rectTransform.anchoredPosition = new Vector2(-335f, 0f);
+        _bodyWakeLabel.rectTransform.sizeDelta = new Vector2(450f, 60f);
+        var sliderObject = new GameObject("BodyWakeSlider", typeof(RectTransform), typeof(Slider));
+        sliderObject.transform.SetParent(row.transform, false);
+        var sliderRect = (RectTransform)sliderObject.transform;
+        sliderRect.anchoredPosition = new Vector2(225f, 0f);
+        sliderRect.sizeDelta = new Vector2(620f, 44f);
+        var slider = sliderObject.GetComponent<Slider>();
+        Image Part(string partName, Transform parent, Color color)
+        {
+            var part = new GameObject(partName, typeof(RectTransform), typeof(Image));
+            part.transform.SetParent(parent, false);
+            part.layer = menuPanel.layer;
+            var partRect = (RectTransform)part.transform;
+            partRect.anchorMin = Vector2.zero; partRect.anchorMax = Vector2.one;
+            partRect.offsetMin = Vector2.zero; partRect.offsetMax = Vector2.zero;
+            var image = part.GetComponent<Image>(); image.color = color;
+            return image;
+        }
+        var track = Part("Track", sliderObject.transform, new Color(1f, 1f, 1f, 0.25f));
+        track.rectTransform.offsetMin = new Vector2(0f, 16f);
+        track.rectTransform.offsetMax = new Vector2(0f, -16f);
+        var fill = Part("Fill", track.transform, new Color(0.35f, 0.8f, 0.6f));
+        slider.fillRect = fill.rectTransform;
+        var handle = Part("Handle", sliderObject.transform, Color.white);
+        handle.rectTransform.sizeDelta = new Vector2(26f, 0f);
+        slider.handleRect = handle.rectTransform;
+        slider.targetGraphic = handle;
+        slider.direction = Slider.Direction.LeftToRight;
+        row.layer = labelObject.layer = sliderObject.layer = menuPanel.layer;
+        return slider;
     }
 
     private void SetAgentsEnabled(bool value)

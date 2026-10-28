@@ -43,8 +43,8 @@ public class FillerAgent : AbstractAgent
         _time = time;
         _callStations = callStations;
 
-        nmAgent.updatePosition = false;
-        nmAgent.velocity = Vector3.zero;
+        nmAgent.updatePosition = true;
+        nmAgent.updateRotation = false;
         nmAgent.acceleration = 999f;
 
         // Real deceleration zone so the agent slows smoothly on approach
@@ -55,6 +55,7 @@ public class FillerAgent : AbstractAgent
 
         transform.position = spawnPos;
         nmAgent.Warp(spawnPos);
+        nmAgent.enabled = false;
 
         _baseSpeed = nmAgent.speed;
         if (_time != null)
@@ -139,6 +140,7 @@ public class FillerAgent : AbstractAgent
 
     void HeadToClass()
     {
+        nmAgent.enabled = true;
         _state = State.GoingToClass;
         _target = nCont.GetClassroomTarget(_classroom);
         nmAgent.stoppingDistance = nCont.classroomArrivalDistance * 0.5f;
@@ -191,8 +193,11 @@ public class FillerAgent : AbstractAgent
     {
         SnapToNavMesh();
         nmAgent.isStopped = false;
-        nmAgent.SetDestination(_target);
-        if (animator != null) { animator.SetBool("isIdle", false); animator.SetBool("Walking", true); }
+        var path = new NavMeshPath();
+        if (nmAgent.CalculatePath(_target, path) && path.status == NavMeshPathStatus.PathComplete)
+            nmAgent.SetPath(path);
+        else nmAgent.SetDestination(_target);
+        _lastMovementPosition = transform.position;
         CreateMove();
     }
 
@@ -203,37 +208,23 @@ public class FillerAgent : AbstractAgent
         if (animator != null) { animator.SetBool("Walking", false); animator.SetBool("isIdle", true); }
     }
 
+    private Vector3 _lastMovementPosition;
+
     void Move()
     {
         if (!_moveAlive) return;
         _movePending = false;
-
-        nmAgent.velocity = Vector3.zero;
-        Vector3 delta = nmAgent.desiredVelocity * 0.03f;
-
-        // Never step further than the remaining distance to the actual
-        // target — prevents overshoot-then-correct oscillation at close
-        // range, a major contributor to visible spinning.
-        float distToTarget = Vector3.Distance(transform.position, _target);
-        if (delta.magnitude > distToTarget)
-            delta = delta.normalized * distToTarget;
-
-        Vector3 nextPos = transform.position + delta;
-
-        // desiredVelocity is horizontal-only, so Y never tracks actual
-        // ground height on its own — resample the NavMesh surface each
-        // tick so the agent doesn't stay pinned at spawn height while
-        // walking over a floor that rises/dips.
-        if (NavMesh.SamplePosition(nextPos, out NavMeshHit hit, 2f, NavMesh.AllAreas))
-            nextPos.y = hit.position.y + 0.6f;
-
-        if (delta.sqrMagnitude > 0.0001f) transform.LookAt(nextPos, Vector3.up);
-        nmAgent.nextPosition = nextPos;
-        transform.position = nextPos;
+        Vector3 delta = transform.position - _lastMovementPosition;
+        _lastMovementPosition = transform.position;
+        delta.y = 0f;
+        bool moving = delta.sqrMagnitude > 0.000001f;
+        if (animator != null) { animator.SetBool("Walking", moving); animator.SetBool("isIdle", !moving); }
+        if (moving)
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(delta), 540f * Time.deltaTime);
     }
-
     void SnapToNavMesh()
     {
+        nmAgent.enabled = true;
         if (nmAgent.isOnNavMesh) return;
         foreach (float r in new float[] { 2f, 5f, 10f })
             if (NavMesh.SamplePosition(transform.position, out NavMeshHit hit, r, NavMesh.AllAreas))

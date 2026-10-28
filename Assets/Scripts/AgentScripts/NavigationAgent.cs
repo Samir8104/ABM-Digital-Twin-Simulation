@@ -1,7 +1,6 @@
 using UnityEngine;
 using ABMU.Core;
 using UnityEngine.AI;
-using System.Collections;
 
 
 // NavigationAgent is a state machine connected to every NavMesh Agent.
@@ -33,6 +32,7 @@ public class NavigationAgent : AbstractAgent
     private bool _isRiding = false;
     private ElevatorController _elevator = null;
     private ElevatorCallStation _pendingCallStation = null;
+    private ElevatorCallStation _waitingCallStation;
     private int _pendingDestFloor = 0;
     private ElevatorCallStation[] _callStations;
 
@@ -42,7 +42,6 @@ public class NavigationAgent : AbstractAgent
 
     public int DepartureWindowMinutes { get; private set; }
     public AgentSchedule Schedule => _schedule;
-    private int _scheduleGeneration = 0;
 
     // ── Class-end guard ───────────────────────────────────────────────────────
     private bool _classEndHandled = false;
@@ -52,7 +51,6 @@ public class NavigationAgent : AbstractAgent
     [SerializeField] private float bathroomChanceDefault = 0.10f;
     [SerializeField] private float bathroomChanceIncrement = 0.08f;
     private float _bathroomChance;
-    int _stayEndMinute = -1;
     // ── Stepper liveness tracking ─────────────────────────────────────────────
     private bool _stepperAlive_DeferredInit = false;
     private bool _stepperAlive_ScheduleTick = false;
@@ -66,7 +64,6 @@ public class NavigationAgent : AbstractAgent
 
     // ── Animation ─────────────────────────────────────────────────────────────
     private bool _isMovingAnim = false;
-    private Coroutine _animTransitionCoroutine;
     public Animator animator;
 
     private int _respawnAtMinute = -1;
@@ -85,35 +82,10 @@ public class NavigationAgent : AbstractAgent
         if (animator == null || isMoving == _isMovingAnim) return;
         _isMovingAnim = isMoving;
 
-        if (_animTransitionCoroutine != null) StopCoroutine(_animTransitionCoroutine);
-        _animTransitionCoroutine = StartCoroutine(isMoving ? BeginWalkingRoutine() : BeginIdleRoutine());
-    }
-
-    IEnumerator BeginWalkingRoutine()
-    {
-        animator.SetBool("isIdle", false);
+        animator.SetBool("isIdle", !isMoving);
         animator.SetBool("stopWalking", false);
-        animator.SetBool("startWalking", true);
-
-
-        yield return new WaitForSeconds(1); 
-
         animator.SetBool("startWalking", false);
-        animator.SetBool("Walking", true);
-
-    }
-
-    IEnumerator BeginIdleRoutine()
-    {
-        animator.SetBool("startWalking", false);
-        animator.SetBool("Walking", false);
-        animator.SetBool("stopWalking", true);
-
-        yield return null;
-
-        animator.SetBool("stopWalking", false);
-        animator.SetBool("isIdle", true);
-
+        animator.SetBool("Walking", isMoving);
     }
 
     //Sets the schedule for the agent
@@ -124,8 +96,10 @@ public class NavigationAgent : AbstractAgent
     }
     void SetNMAgentProperties()
     {
-        nmAgent.updatePosition = false;
-        nmAgent.velocity = Vector3.zero;
+        // Let the NavMesh simulation own movement and avoidance. Writing velocity
+        // every tick overrides that simulation and stalls newly assigned paths.
+        nmAgent.updatePosition = true;
+        nmAgent.updateRotation = false;
         nmAgent.acceleration = 999f;
 
         nmAgent.stoppingDistance = Mathf.Max(0.5f, nCont.distToTargetThreshold * 0.6f);
@@ -298,7 +272,7 @@ public class NavigationAgent : AbstractAgent
                 {
                     _classEndHandled = true;
                     _schedule.SetActivity(AgentActivity.Wandering);
-                    StartCoroutine(DepartureDelayRoutine(Random.Range(0f, 4f), _scheduleGeneration));
+                    PostClassDecision();
                 }
                 break;
 
@@ -308,12 +282,6 @@ public class NavigationAgent : AbstractAgent
         }
     }
 
-    IEnumerator DepartureDelayRoutine(float delaySeconds, int generation)
-    {
-        yield return new WaitForSeconds(delaySeconds);
-        if (generation != _scheduleGeneration) yield break; // agent got reassigned mid-delay — abort
-        PostClassDecision();
-    }
     // ── Post-class decision ───────────────────────────────────────────────────
 
     void AfterActivityDecision()
@@ -366,7 +334,6 @@ public class NavigationAgent : AbstractAgent
             return;
         }
         IncrementBathroomChance();
-       // this function runs once, so def not the issue :(
         RouteByGap(gapMinutes);
     }
     void RouteByGap(int gapMinutes)
@@ -419,7 +386,6 @@ public class NavigationAgent : AbstractAgent
         _schedule.SetActivity(AgentActivity.GoingToStudying);
         NavigateDirect(node);
     }
-    private bool _pendingLeaveIsExit = false;
     void LeaveBuilding()
     {
         var today = _time.GetCurrentDayOfWeek();
@@ -432,7 +398,6 @@ public class NavigationAgent : AbstractAgent
 
         if (verboseLogging) Debug.Log($"[{name}] [TIMING] LeaveBuilding → {exitNode.name} at real-t={Time.realtimeSinceStartup:F2}");
         _schedule.SetActivity(AgentActivity.GoingToExit);
-        _pendingLeaveIsExit = true;
         Vector3 scatterTarget = nCont.GetScatteredPointNearNode(exitNode);
         SetScatteredTarget(exitNode, scatterTarget);
     }
@@ -442,10 +407,7 @@ public class NavigationAgent : AbstractAgent
 
     void DeactivateAgent(bool hasMoreClasses)
     {
-        SafeDestroyStepper("CheckDistToTarget");
-        SafeDestroyStepper("Move");
-        SafeDestroyStepper("StayInPlace");
-        SafeDestroyStepper("BathroomUrge");
+        ResetNavigation();
 
         _schedule.SetActivity(AgentActivity.OffCampus);
 
@@ -454,10 +416,10 @@ public class NavigationAgent : AbstractAgent
         foreach (var c in _colliders) c.enabled = false;
         if (animator != null) animator.enabled = false;
 
-        // Stop the agent instead of disabling the component — avoids
-        // triggering NavMesh crowd/avoidance recomputation.
+        // Remove invisible off-campus bodies from the avoidance simulation.
         nmAgent.isStopped = true;
         nmAgent.velocity = Vector3.zero;
+        nmAgent.enabled = false; // Invisible pooled bodies must not block the entrance.
 
         if (!hasMoreClasses)
         {
@@ -478,6 +440,7 @@ public class NavigationAgent : AbstractAgent
             mouth.Stop(false, ParticleSystemStopBehavior.StopEmittingAndClear);
 
         GameObject spawnNode = nCont.GetRandomExitNode();
+        nmAgent.enabled = true;
         if (spawnNode != null)
         {
             Vector3 pos = nCont.GetScatteredPointNearNode(spawnNode);
@@ -492,7 +455,39 @@ public class NavigationAgent : AbstractAgent
 
     private void OnDestroy()
     {
+        ResetNavigation();
+        if (_fullyInitialized)
+        {
+            SafeDestroyStepper("ScheduleTick");
+            SafeDestroyStepper("DeferredInit");
+        }
         if (_time != null) _time.OnSimSpeedChanged -= HandleSimSpeedChanged;
+    }
+
+    private void OnDisable()
+    {
+        if (_fullyInitialized) ResetNavigation();
+    }
+
+    private void ResetNavigation()
+    {
+        if (!_fullyInitialized) return;
+        SafeDestroyStepper("CheckDistToTarget");
+        SafeDestroyStepper("Move");
+        SafeDestroyStepper("StayInPlace");
+        ReleaseElevatorReservation();
+        if (_elevator != null) _elevator.ExitAgent(this);
+        _elevator = null;
+        _isRiding = false;
+        isNearTarget = false;
+        if (nCont != null) nCont.ReleaseRoomTarget(this);
+        if (nmAgent != null && nmAgent.isOnNavMesh)
+        {
+            nmAgent.isStopped = true;
+            nmAgent.ResetPath();
+        }
+        if (nmAgent != null) nmAgent.updatePosition = true;
+        SetMovingAnimState(false);
     }
     #endregion
 
@@ -503,19 +498,24 @@ public class NavigationAgent : AbstractAgent
         if (!_fullyInitialized)
             Init(startRoom);
 
+        ResetNavigation();
+
         _schedule = schedule;
         DepartureWindowMinutes = Random.Range(10, 21);
 
         transform.position = spawnPos;
         if (nmAgent != null)
         {
+            nmAgent.enabled = true;
             nmAgent.Warp(spawnPos);
             nmAgent.isStopped = true; // No path/avoidance work until this student's departure time.
+            nmAgent.enabled = false;
         }
 
         targetRoom = startRoom;
         _classEndHandled = false;
         _respawnAtMinute = -1;
+        _bathroomChance = bathroomChanceDefault;
 
         if (_renderers == null) _renderers = GetComponentsInChildren<Renderer>();
         if (_colliders == null) _colliders = GetComponentsInChildren<Collider>();
@@ -540,13 +540,12 @@ public class NavigationAgent : AbstractAgent
     #endregion
 
     #region TimedStay
-    int _stayMinutesRemaining = 0;
+    private double _stayEndSimulationSeconds;
 
     void StartTimedStay(int simMinutes)
     {
         SafeDestroyStepper("StayInPlace");
-        int nowMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
-        _stayEndMinute = nowMinute + simMinutes;
+        _stayEndSimulationSeconds = _time.ElapsedSimulationSeconds + simMinutes * 60.0;
         SafeCreateStepper("StayInPlace", StayInPlace, 2, 1);
     }
 
@@ -554,8 +553,7 @@ public class NavigationAgent : AbstractAgent
     void StayInPlace()
     {
         if (!_stepperAlive_StayInPlace) return;
-        int nowMinute = _time.CurrentHour * 60 + _time.CurrentMinute;
-        if (nowMinute <= _stayEndMinute) return;
+        if (_time == null || !_time.IsRunning || _time.ElapsedSimulationSeconds < _stayEndSimulationSeconds) return;
         SafeDestroyStepper("StayInPlace");
         switch (_schedule.CurrentActivity)
         {
@@ -622,14 +620,20 @@ public class NavigationAgent : AbstractAgent
         if (!_stepperAlive_CheckDist) return;
 
         // This is where the function checks how close it is to a target. If the agent is still far away then it returns and the agent keeps walking.
-        float d = Vector3.Distance(transform.position, target);
+        if (nmAgent == null || !nmAgent.isOnNavMesh || nmAgent.pathPending) return;
+        Vector3 offset = transform.position - target;
+        float d = new Vector2(offset.x, offset.z).magnitude;
         bool headingToClass = _pendingCallStation == null && _schedule.CurrentActivity == AgentActivity.GoingToClass;
-        if (headingToClass ? !nCont.HasArrivedInClassroom(nmAgent, transform.position, target) : d >= nCont.distToTargetThreshold)
+        float arrivalDistance = headingToClass ? nCont.classroomArrivalDistance :
+            (_pendingCallStation != null ? 0.4f : _schedule.CurrentActivity == AgentActivity.GoingToExit ? nCont.distToTargetThreshold : 0.5f);
+        if (Mathf.Abs(offset.y) > 1.2f || d > arrivalDistance ||
+            nmAgent.pathStatus != NavMeshPathStatus.PathComplete || nmAgent.remainingDistance > arrivalDistance)
         { isNearTarget = false; return; }
         if (verboseLogging) Debug.Log($"[{name}] [TIMING] CheckDistToTarget arrived at real-t={Time.realtimeSinceStartup:F2}, dist={d:F2}");
 
         isNearTarget = true;
         nmAgent.isStopped = true;
+        nmAgent.ResetPath();
         SetMovingAnimState(false);
         SafeDestroyStepper("CheckDistToTarget");
         SafeDestroyStepper("Move");
@@ -639,8 +643,12 @@ public class NavigationAgent : AbstractAgent
             ElevatorCallStation station = _pendingCallStation;
             int destFloor = _pendingDestFloor;
             _pendingCallStation = null;
+            _waitingCallStation = station;
             if (!station.TryRegisterWaitingAgent(this, destFloor))
+            {
+                ReleaseElevatorReservation();
                 TakeStairs(targetRoom);
+            }
             return;
         }
 
@@ -681,6 +689,7 @@ public class NavigationAgent : AbstractAgent
 
     public void SetScatteredTarget(GameObject node, Vector3 scatteredPoint)
     {
+        PrepareToNavigate();
         SnapToNavMesh();
         targetRoom = node;
         target = scatteredPoint;
@@ -689,9 +698,8 @@ public class NavigationAgent : AbstractAgent
         SafeDestroyStepper("CheckDistToTarget");
         SafeDestroyStepper("Move");
 
-        nmAgent.isStopped = false;
-        nmAgent.SetDestination(target);
-        SetMovingAnimState(true);
+        StartNavigationPath();
+        SetMovingAnimState(false); // Walking starts when the body actually moves.
         SafeCreateStepper("CheckDistToTarget", CheckDistToTarget, 2, 100);
         SafeCreateStepper("Move", Move, 1, 105);
     }
@@ -718,12 +726,12 @@ public class NavigationAgent : AbstractAgent
 
     public void SetTarget(GameObject room)
     {
-        _moveLogCount = 0;
+        PrepareToNavigate();
         SnapToNavMesh();
         targetRoom = room;
         bool headingToClass = _schedule != null && _schedule.CurrentActivity == AgentActivity.GoingToClass;
-        target = headingToClass ? nCont.GetClassroomTarget(room) : nCont.GetRandomPointInRoom(room);
-        nmAgent.stoppingDistance = headingToClass ? nCont.classroomArrivalDistance * 0.5f : Mathf.Max(0.5f, nCont.distToTargetThreshold * 0.6f);
+        target = nCont.ReserveRoomTarget(this, room, headingToClass);
+        nmAgent.stoppingDistance = headingToClass ? nCont.classroomArrivalDistance * 0.5f : 0.25f;
 
         if (verboseLogging)
         {
@@ -735,13 +743,11 @@ public class NavigationAgent : AbstractAgent
         }
 
 
-        _moveLogCount = 0;
         SafeDestroyStepper("CheckDistToTarget");
         SafeDestroyStepper("Move");
 
-        nmAgent.isStopped = false;
-        nmAgent.SetDestination(target);
-        SetMovingAnimState(true);
+        StartNavigationPath();
+        SetMovingAnimState(false);
         SafeCreateStepper("CheckDistToTarget", CheckDistToTarget, 2, 100);
         SafeCreateStepper("Move", Move, 1, 105);
    
@@ -750,34 +756,48 @@ public class NavigationAgent : AbstractAgent
 
     #region Movement
 
-    private bool _loggedFirstMove = false;
-    private int _moveLogCount = 0;
-    // Move runs every tick and it moves the agents transform to the desired target. Instead of using unity's automatic Agent.updatePosition movement, we move the agent manually. 
+    private Vector3 _lastMovementPosition;
+
+    private void StartNavigationPath()
+    {
+        // Resolve departures now instead of placing a whole class into Unity's
+        // asynchronous path queue, which can leave a visible multi-second wait.
+        var path = new NavMeshPath();
+        nmAgent.isStopped = false;
+        if (nmAgent.CalculatePath(target, path) && path.status == NavMeshPathStatus.PathComplete)
+            nmAgent.SetPath(path);
+        else
+            nmAgent.SetDestination(target);
+    }
+
+    private void PrepareToNavigate()
+    {
+        SafeDestroyStepper("StayInPlace");
+        ReleaseElevatorReservation();
+        nCont.ReleaseRoomTarget(this);
+        isNearTarget = false;
+        _lastMovementPosition = transform.position;
+    }
+
+    // Navigation owns position; this step only turns/animates actual movement.
     void Move()
     {
         if (!_stepperAlive_Move) return;
         if (_isRiding) return;
 
-        nmAgent.velocity = Vector3.zero;
-        Vector3 delta = nmAgent.desiredVelocity * 0.03f;
-
-        float distToTarget = Vector3.Distance(transform.position, target);
-        if (delta.magnitude > distToTarget)
-            delta = delta.normalized * distToTarget;
-
-        Vector3 nextPos = transform.position + delta;
-
-        if (NavMesh.SamplePosition(nextPos, out NavMeshHit hit, 2f, NavMesh.AllAreas))
-            nextPos.y = hit.position.y + 0.6f;
-
-        if (delta.sqrMagnitude > 0.0001f) transform.LookAt(nextPos, Vector3.up);
-        nmAgent.nextPosition = nextPos;
-        transform.position = nextPos;
+        Vector3 delta = transform.position - _lastMovementPosition;
+        _lastMovementPosition = transform.position;
+        delta.y = 0;
+        bool moving = delta.sqrMagnitude > 0.000001f;
+        SetMovingAnimState(moving);
+        if (moving)
+            transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(delta), 540f * Time.deltaTime);
     }
 
 
     private void SnapToNavMesh()
     {
+        nmAgent.enabled = true;
         if (nmAgent.isOnNavMesh) return;
         foreach (float r in new float[] { 2f, 5f, 10f })
         {
@@ -796,16 +816,21 @@ public class NavigationAgent : AbstractAgent
     private void StartElevatorJourney(GameObject destinationRoom, int destFloor,
                                        ElevatorCallStation station)
     {
+        PrepareToNavigate();
         SnapToNavMesh();
         targetRoom = destinationRoom;
+        if (!station.TryReserveAgent(this, destFloor, out Vector3 queuePosition))
+        {
+            TakeStairs(destinationRoom);
+            return;
+        }
         TargetFloor = destFloor;
         _pendingCallStation = station;
         _pendingDestFloor = destFloor;
-        target = station.transform.position;
-        nmAgent.stoppingDistance = 0.5f;
-        nmAgent.isStopped = false;
-        nmAgent.SetDestination(target);
-        SetMovingAnimState(true);
+        target = queuePosition;
+        nmAgent.stoppingDistance = 0.2f;
+        StartNavigationPath();
+        SetMovingAnimState(false);
 
 
         SafeDestroyStepper("CheckDistToTarget");
@@ -816,13 +841,34 @@ public class NavigationAgent : AbstractAgent
 
     private void TakeStairs(GameObject room) => SetTarget(room);
 
+    public bool HasElevatorReservation(ElevatorCallStation station) =>
+        isActiveAndEnabled && (_pendingCallStation == station || _waitingCallStation == station);
+
+    private void ReleaseElevatorReservation()
+    {
+        if (_pendingCallStation != null) _pendingCallStation.RemoveAgent(this);
+        if (_waitingCallStation != null) _waitingCallStation.RemoveAgent(this);
+        _pendingCallStation = null;
+        _waitingCallStation = null;
+    }
+
+    public void CancelElevatorWait(ElevatorCallStation station)
+    {
+        if (!HasElevatorReservation(station)) return;
+        ReleaseElevatorReservation();
+        TakeStairs(targetRoom);
+    }
+
     public void BoardElevator(ElevatorController elevator)
     {
+        ReleaseElevatorReservation();
         _elevator = elevator;
         _isRiding = true;
         nmAgent.isStopped = true;
+        nmAgent.ResetPath();
         SetMovingAnimState(false);
         elevator.BoardAgent(this);
+        nmAgent.enabled = false;
     }
 
     public void ExitElevator(int floorIndex)
@@ -832,15 +878,19 @@ public class NavigationAgent : AbstractAgent
         _elevator = null;
         _isRiding = false;
         transform.position = exitPos;
+        nmAgent.enabled = true;
         nmAgent.Warp(exitPos);
+        nmAgent.updatePosition = true;
         nmAgent.isStopped = false;
         SetTarget(targetRoom);
     }
 
     public void TeleportWithElevator(Vector3 slotPosition)
     {
+        // Riders are carried outside the NavMesh; do not let native navigation
+        // pull them back to the landing while the cage travels.
+        nmAgent.updatePosition = false;
         transform.position = slotPosition;
-        nmAgent.nextPosition = slotPosition;
     }
     private ElevatorCallStation GetBestStationForFloor(int floor)
     {
@@ -850,7 +900,7 @@ public class NavigationAgent : AbstractAgent
         {
             if (s.floorIndex != floor) continue;
             if (!s.IsElevatorViable()) continue;
-            int load = s.WaitingCount + s.elevatorController.RiderCount;
+            int load = s.ReservedCount + s.elevatorController.RiderCount;
             if (load < bestLoad) { bestLoad = load; best = s; }
         }
         if (best != null && bestLoad >= nCont.maxElevatorLoadBeforeStairs) return null;

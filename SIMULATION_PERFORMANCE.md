@@ -8,6 +8,31 @@ then resume when the simulation day begins. Students who are idle/off campus do
 not emit or contribute body wakes; previously emitted world-space aerosols can
 continue to move. Idle/off-campus students also stop animating.
 
+The main menu's **Particle body wake** slider scales walking-induced particle
+motion from **Off (0%)** to the existing authored strength (**100%**, the default).
+The setting is remembered between runs. Breathing, coughing, and room airflow
+keep their own strengths.
+
+Navigation now owns agent positions and avoidance. Departure paths are resolved
+synchronously, and walking animations follow actual movement. Idle/off-campus
+pool members are removed from avoidance until departure. Activity destinations
+are sampled on connected walkable surfaces and spread among agents. Timed stays
+use elapsed simulation time so midnight cannot strand bathroom/office-hour visits.
+
+Elevator capacity includes approaching passengers. Each passenger reserves a
+separate walkable waiting spot; overflow uses stairs. Tickets are released when
+boarding, disabling, or reusing a body, and expired tickets reroute to stairs
+after `maximumWaitSeconds` (45 seconds by default). `queueSpacing` controls
+landing spacing (1.1 metres by default).
+
+`NavigationBehaviorValidation.Run` checks the actual menu and building activity
+targets, then exercises departure, timed-stay, elevator, pooled-reuse, and wake
+regressions in Play mode. It finishes with a three-day building run using 200
+agents at 12x simulation speed. Run it in an isolated batch Unity copy without
+`-quit`; the fixture exits when it finishes. Particles and rendering are disabled
+for the building movement soak; wake scaling and the rendered menu are checked
+separately.
+
 Agents are instantiated at the sampled NavMesh spawn position, rather than at
 an off-mesh staging root before being warped. The latter produced thousands of
 navigation errors across recent editor runs. Shared clock/elevator references

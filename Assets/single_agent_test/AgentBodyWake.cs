@@ -113,7 +113,7 @@ public class AgentBodyWake : MonoBehaviour
             Vector3 bodyOffset = worldPosition - bodyPosition + wakeOffset;
             float d2 = (bodyOffset.x * bodyOffset.x + bodyOffset.z * bodyOffset.z) * inverseWakeRadiusSquared + bodyOffset.y * bodyOffset.y / (0.9f * 0.9f);
             float falloff = Mathf.Max(0f, 1f - d2);
-            velocity = wakeVelocity * (falloff * falloff);
+            velocity = wakeVelocity * (falloff * falloff * ParticleSimulationSettings.BodyWakeStrength);
         }
         Vector3 offset = worldPosition - mouthPosition;
         float forward = Vector3.Dot(offset, mouthForward);
